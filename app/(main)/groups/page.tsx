@@ -5,7 +5,9 @@ import Link from 'next/link'
 import { supabase } from '@/lib/supabase/client'
 import { UsersRound } from 'lucide-react'
 
+// ----------------------------------------------------------------------
 // --- กำหนดโครงสร้างข้อมูลกลุ่ม (Interface) ---
+// ----------------------------------------------------------------------
 interface Group {
   id: string
   name: string
@@ -15,6 +17,9 @@ interface Group {
   owner_id: string
 }
 
+// ----------------------------------------------------------------------
+// --- Component หลัก: GroupsPage (หน้าแสดงกลุ่มทั้งหมด) ---
+// ----------------------------------------------------------------------
 export default function GroupsPage() {
   // --- State: จัดการข้อมูลและสถานะ ---
   const [groups, setGroups] = useState<Group[]>([])
@@ -27,13 +32,17 @@ export default function GroupsPage() {
       setLoading(true)
       setError('')
 
-      // ดึงข้อมูลจากตาราง 'groups' ทั้งหมด
-      const { data, error } = await supabase.from('groups').select('*')
+      // Query: ดึงข้อมูลจากตาราง 'groups' ทั้งหมด
+      const { data, error } = await supabase
+        .from('groups')
+        .select('*')
+        .order('name', { ascending: true }) // เรียงตามชื่อกลุ่ม
 
       if (error) {
         console.error('Error fetching groups:', error.message)
         setError('เกิดข้อผิดพลาดในการโหลดกลุ่ม')
       } else {
+        // อัปเดต State ด้วยข้อมูลที่ดึงมา
         setGroups((data as Group[]) || [])
       }
       setLoading(false)
@@ -46,6 +55,7 @@ export default function GroupsPage() {
   const avatarPlaceholder = "https://placehold.co/150x150?text=No+Avatar";
   const coverPlaceholder = "https://placehold.co/600x400/e2e8f0/94a3b8?text=No+Cover";
 
+  // --- Render (JSX) ---
   return (
     // --- Container หลัก ---
     <div className="min-h-screen bg-gray-50 p-10 flex flex-col items-center">
@@ -67,58 +77,62 @@ export default function GroupsPage() {
       {/* Grid แสดงรายการกลุ่ม */}
       <div className="flex flex-wrap justify-center gap-6 w-full max-w-6xl">
         {groups.map((group) => {
-          // เตรียม URL รูปภาพ Avatar
+          // 1. เตรียม URL รูปภาพ Avatar
           const { data: avatarData } = supabase.storage.from('groups').getPublicUrl(group.avatar_url || 'no-path');
           const avatarUrl = group.avatar_url ? avatarData.publicUrl : avatarPlaceholder;
           
-          // เตรียม URL รูปภาพ Cover
+          // 2. เตรียม URL รูปภาพ Cover
           const { data: coverData } = supabase.storage.from('groups').getPublicUrl(group.cover_url || 'no-path');
           const coverUrl = group.cover_url ? coverData.publicUrl : coverPlaceholder;
 
           return (
             <div
               key={group.id}
-              className="w-52 h-60 rounded-2xl shadow-md overflow-hidden cursor-pointer transform hover:scale-105 transition relative bg-gray-200"
+              className="w-52 h-60 rounded-2xl shadow-md overflow-hidden cursor-pointer transform hover:scale-105 transition relative bg-gray-200 group/card"
               style={{
-                // 🛠️ แก้ไข: ใส่ quote ครอบ URL กันพังกรณีมีเว้นวรรค
+                // กำหนด Cover เป็น Background Image
                 backgroundImage: `url('${coverUrl}')`,
                 backgroundSize: 'cover',
                 backgroundPosition: 'center',
               }}
             >
               {/* Overlay สีดำจางๆ เพื่อให้อ่านตัวหนังสือชัดขึ้น */}
-              <div className="absolute inset-0 bg-black/40"></div>
+              <div className="absolute inset-0 bg-black/40 group-hover/card:bg-black/50 transition-colors"></div>
               
-              {/* รูปโปรไฟล์กลุ่ม (Avatar Bubble) */}
-              <div className="absolute top-4 left-1/2 transform -translate-x-1/2 w-20 h-20 rounded-full overflow-hidden border-4 border-white shadow-lg aspect-square shrink-0 bg-white">
-                {group.avatar_url ? (
-                  // แสดง Avatar ถ้ามี
-                  <img 
-                    src={avatarUrl} 
-                    alt={group.name} 
-                    className="w-full h-full object-cover" 
-                    onError={(e) => { e.currentTarget.src = avatarPlaceholder; }}
-                  />
-                ) : (
-                  // แสดง Placeholder Icon
-                  <div className="w-full h-full bg-gray-300 flex items-center justify-center">
-                    <UsersRound className="w-10 h-10 text-gray-600" />
-                  </div>
-                )}
+              {/* เนื้อหา Card (ใช้ relative เพื่อจัดตำแหน่งเหนือ Overlay) */}
+              <div className='relative flex flex-col items-center h-full pt-4'>
+                {/* รูปโปรไฟล์กลุ่ม (Avatar Bubble) */}
+                <div className="w-20 h-20 rounded-full overflow-hidden border-4 border-white shadow-lg aspect-square shrink-0 bg-white">
+                  {group.avatar_url ? (
+                    // แสดง Avatar ถ้ามี
+                    <img 
+                      src={avatarUrl} 
+                      alt={group.name} 
+                      className="w-full h-full object-cover" 
+                      // Fallback: หากโหลดรูปไม่สำเร็จ ให้แสดง Placeholder
+                      onError={(e) => { e.currentTarget.src = avatarPlaceholder; }}
+                    />
+                  ) : (
+                    // แสดง Placeholder Icon
+                    <div className="w-full h-full bg-gray-300 flex items-center justify-center">
+                      <UsersRound className="w-10 h-10 text-gray-600" />
+                    </div>
+                  )}
+                </div>
+
+                {/* ชื่อกลุ่ม */}
+                <h2 className="absolute bottom-16 w-full text-center text-white text-xl sm:text-2xl font-extrabold break-words line-clamp-2 p-2 drop-shadow-md">
+                  {group.name}
+                </h2>
+
+                {/* ปุ่มดูรายละเอียด (Link) */}
+                <Link
+                  href={`/groups/${group.id}`}
+                  className="absolute bottom-4 w-40 text-center bg-sky-600 text-white py-2 rounded-xl font-medium hover:bg-sky-700 transition shadow-lg"
+                >
+                  ดูรายละเอียด
+                </Link>
               </div>
-
-              {/* ชื่อกลุ่ม */}
-              <h2 className="absolute bottom-16 w-full text-center text-white text-xl sm:text-2xl font-extrabold break-words line-clamp-2 p-2 drop-shadow-md">
-                {group.name}
-              </h2>
-
-              {/* ปุ่มดูรายละเอียด */}
-              <Link
-                href={`/groups/${group.id}`}
-                className="absolute bottom-4 left-1/2 transform -translate-x-1/2 w-40 text-center bg-sky-600 text-white py-2 rounded-xl font-medium hover:bg-sky-700 transition shadow-lg"
-              >
-                ดูรายละเอียด
-              </Link>
             </div>
           )
         })}
