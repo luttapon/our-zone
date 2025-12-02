@@ -1,21 +1,24 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
-// ใช้ Component ปฏิทินภายนอก
+// ใช้ Component ปฏิทินภายนอก (React Calendar)
 import Calendar from "react-calendar";
 import "react-calendar/dist/Calendar.css"; // Style หลักของ React Calendar
 import { supabase } from "@/lib/supabase/client";
-import AddEventModal from "./AddEventModal"; // สมมติว่ามี Component Modal สำหรับเพิ่ม/แก้ไขอยู่แล้ว
+// สมมติว่ามี Component Modal สำหรับเพิ่ม/แก้ไขอยู่แล้ว
+import AddEventModal from "./AddEventModal"; 
 
+// ----------------------------------------------------------------------
 // --- กำหนดโครงสร้างข้อมูล (Interfaces) ---
+// ----------------------------------------------------------------------
 interface CalendarEvent {
   id: string;
   group_id: string;
   user_id: string;
   title: string;
   description?: string | null;
-  start_time: string; // ISO string
-  end_time: string;  // ISO string
+  start_time: string; // ISO string: เวลาเริ่มต้น
+  end_time: string; // ISO string: เวลาสิ้นสุด
 }
 
 interface GroupCalendarProps {
@@ -24,6 +27,9 @@ interface GroupCalendarProps {
   isOwner: boolean; // ใช้ตรวจสอบสิทธิ์ในการเพิ่ม/แก้ไข/ลบกิจกรรม
 }
 
+// ----------------------------------------------------------------------
+// --- Component หลัก: GroupCalendar ---
+// ----------------------------------------------------------------------
 const GroupCalendar: React.FC<GroupCalendarProps> = ({
   groupId,
   userId,
@@ -41,9 +47,11 @@ const GroupCalendar: React.FC<GroupCalendarProps> = ({
 
   const [showDetail, setShowDetail] = useState(false); // Modal รายละเอียดกิจกรรมในวัน
   const [detailEvents, setDetailEvents] = useState<CalendarEvent[]>([]); // กิจกรรมที่ตรงกับวันที่เลือก
-  const [selectedEvent, setSelectedEvent] = useState<CalendarEvent | null>(null); // กิจกรรมที่ถูกเลือกดูใน Modal รายละเอียด
+  const [selectedEvent, setSelectedEvent] = useState<CalendarEvent | null>(
+    null
+  ); // กิจกรรมที่ถูกเลือกดูใน Modal รายละเอียด
 
-  // --- Effect: ล็อคการเลื่อนหน้าจอเมื่อเปิด Modal รายละเอียด ---
+  // --- Effect: ล็อค/ปลดล็อคการเลื่อนหน้าจอเมื่อเปิด/ปิด Modal รายละเอียด ---
   useEffect(() => {
     if (showDetail) document.body.style.overflow = "hidden";
     else document.body.style.overflow = "unset";
@@ -53,12 +61,12 @@ const GroupCalendar: React.FC<GroupCalendarProps> = ({
     };
   }, [showDetail]);
 
-  // --- Logic: ดึงข้อมูลกิจกรรมจาก Supabase ---
+  // --- Logic: ดึงข้อมูลกิจกรรมทั้งหมดจาก Supabase ---
   const fetchEvents = async () => {
     setLoading(true);
     setFetchError(null);
     try {
-      // ดึงกิจกรรมทั้งหมดของ group_id นี้
+      // Query: ดึงกิจกรรมทั้งหมดของ group_id นี้
       const { data, error, status } = await supabase
         .from("calendar_events")
         .select("*")
@@ -95,15 +103,16 @@ const GroupCalendar: React.FC<GroupCalendarProps> = ({
         const eventEnd = new Date(e.end_time);
         const checkDate = new Date(date);
 
-        // เปรียบเทียบเฉพาะวัน/เดือน/ปี (ตั้งค่าเวลาเริ่มต้น/สิ้นสุดของวัน)
-        eventStart.setHours(0, 0, 0, 0); 
+        // ตั้งค่าเวลาเป็น 00:00:00:000 เพื่อเปรียบเทียบเฉพาะ วัน/เดือน/ปี
+        eventStart.setHours(0, 0, 0, 0);
+        // ตั้งค่าเวลาสิ้นสุดของวันให้เป็น 23:59:59:999 เพื่อรวมกิจกรรมที่สิ้นสุดในวันนั้น
         eventEnd.setHours(23, 59, 59, 999);
         checkDate.setHours(0, 0, 0, 0); // วันที่ที่ต้องการตรวจสอบ
 
-        // กิจกรรมต้องอยู่ระหว่างวันเริ่มต้นและวันสิ้นสุด (รวมวันนั้นด้วย)
+        // กิจกรรมต้องมีช่วงเวลาที่ **ครอบคลุม** หรือ **ตรงกับ** วันที่ checkDate
         return checkDate >= eventStart && checkDate <= eventEnd;
       })
-      .slice(0);
+      .slice(0); // สร้างสำเนา Array
 
   // --- Helper: นับจำนวนกิจกรรมในวันนั้นๆ (ใช้สำหรับ Calendar Tile) ---
   const getEventCountForDay = (date: Date) =>
@@ -112,24 +121,29 @@ const GroupCalendar: React.FC<GroupCalendarProps> = ({
       const eventEnd = new Date(e.end_time);
       const checkDate = new Date(date);
 
-      // ใช้ Logic เดียวกันในการตรวจสอบวันที่
+      // ใช้ Logic เดียวกันในการตรวจสอบวันที่ (เปรียบเทียบเฉพาะวัน)
       eventStart.setHours(0, 0, 0, 0);
       eventEnd.setHours(23, 59, 59, 999);
       checkDate.setHours(0, 0, 0, 0);
 
+      // นับกิจกรรมที่ตรงกับวันนั้น
       return checkDate >= eventStart && checkDate <= eventEnd;
     }).length;
 
   // --- Handlers: การโต้ตอบกับปฏิทิน ---
+
+  // เปลี่ยนวันที่ถูกเลือก (เมื่อเปลี่ยนเดือน/ปี หรือเลือกวันใหม่)
   const handleDateChange: React.ComponentProps<typeof Calendar>["onChange"] = (
     value
   ) => {
     if (!value) return;
     // รองรับการรับค่าแบบ Date หรือ Array[Date]
     if (value instanceof Date) setSelectedDate(value);
-    else if (Array.isArray(value) && value[0] instanceof Date) setSelectedDate(value[0]);
+    else if (Array.isArray(value) && value[0] instanceof Date)
+      setSelectedDate(value[0]);
   };
 
+  // คลิกที่ช่องวันในปฏิทิน
   const handleDayClick = (date: Date) => {
     setSelectedDate(date);
     const dayEvents = getEventsForDay(date); // กรองกิจกรรมสำหรับวันนั้น
@@ -137,29 +151,34 @@ const GroupCalendar: React.FC<GroupCalendarProps> = ({
     setSelectedEvent(null); // รีเซ็ตการเลือกกิจกรรมย่อย
     setShowDetail(true); // เปิด Modal รายละเอียด
   };
-  
+
   // --- Logic: การลบกิจกรรม (ใช้ใน Modal รายละเอียด) ---
   const handleDeleteEvent = async (eventId: string) => {
     if (!confirm("คุณแน่ใจว่าจะลบกิจกรรมนี้หรือไม่?")) return;
     try {
+      // ลบกิจกรรมจากตาราง 'calendar_events'
       const { error } = await supabase
         .from("calendar_events")
         .delete()
-        .eq("id", eventId);
+        .eq("id", eventId); // ลบตาม ID
+
       if (error) throw error;
-      
+
       // ลบสำเร็จ: ปิด Modal และโหลดกิจกรรมใหม่
       setShowDetail(false);
       fetchEvents();
     } catch (err) {
       alert((err as Error).message || "ลบกิจกรรมไม่สำเร็จ");
     }
-  }
+  };
 
+  // ----------------------------------------------------------------------
+  // --- JSX (Return Statement) ---
+  // ----------------------------------------------------------------------
   return (
     <div className="bg-gradient-to-br from-sky-50 via-white to-blue-50 rounded-3xl shadow-xl border border-sky-100 w-full max-w-6xl mx-auto">
       
-      {/* ส่วนหัว */}
+      {/* 1. ส่วนหัว */}
       <div className="mb-6 text-center p-6">
         <h2 className="text-3xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-sky-700 to-blue-700 mb-1">
           ปฏิทินกลุ่ม
@@ -168,20 +187,21 @@ const GroupCalendar: React.FC<GroupCalendarProps> = ({
           เลือกวันที่เพื่อดูรายละเอียดกิจกรรม
         </p>
       </div>
-
-      {/* ปฏิทิน (Calendar) */}
+      
+      {/* 2. ปฏิทิน (Calendar) */}
       <div className="flex justify-center px-4 pb-4">
         <Calendar
           className="w-full bg-white rounded-2xl shadow-md border border-gray-200 custom-calendar"
           value={selectedDate}
           onChange={handleDateChange}
-          onClickDay={handleDayClick}
+          onClickDay={handleDayClick} // เมื่อคลิกที่วัน
           nextLabel="›"
           prevLabel="‹"
           // กำหนด Class CSS ตามสถานะของวัน (มีกิจกรรม, ถูกเลือก)
           tileClassName={({ date }) => {
             const eventCount = getEventCountForDay(date);
-            const isSelected = new Date(date).toDateString() === selectedDate.toDateString();
+            const isSelected =
+              new Date(date).toDateString() === selectedDate.toDateString();
 
             if (isSelected) return "selected-day";
             if (eventCount > 0) {
@@ -197,6 +217,7 @@ const GroupCalendar: React.FC<GroupCalendarProps> = ({
               const eventCount = getEventCountForDay(date);
               if (eventCount === 0) return null;
 
+              // กำหนดสีตามจำนวนกิจกรรม
               const colors = [
                 "bg-gradient-to-r from-red-500 to-red-600",
                 "bg-gradient-to-r from-orange-500 to-orange-600",
@@ -218,7 +239,7 @@ const GroupCalendar: React.FC<GroupCalendarProps> = ({
         />
       </div>
 
-      {/* สถานะ Loading & Error */}
+      {/* 3. สถานะ Loading & Error */}
       <div className="px-6 pb-6">
         {loading && (
           <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-lg text-sm text-blue-700 flex items-center gap-2 animate-pulse">
@@ -232,7 +253,7 @@ const GroupCalendar: React.FC<GroupCalendarProps> = ({
         )}
       </div>
 
-      {/* ปุ่มเพิ่มกิจกรรม (เฉพาะเจ้าของกลุ่ม) */}
+      {/* 4. ปุ่มเพิ่มกิจกรรม (เฉพาะเจ้าของกลุ่ม) */}
       <div className="px-6 pb-6">
         {isOwner && (
           <button
@@ -247,7 +268,7 @@ const GroupCalendar: React.FC<GroupCalendarProps> = ({
         )}
       </div>
 
-      {/* Modal: เพิ่ม/แก้ไขกิจกรรม */}
+      {/* 5. Modal: เพิ่ม/แก้ไขกิจกรรม */}
       {showAddModal && (
         <AddEventModal
           groupId={groupId}
@@ -260,12 +281,15 @@ const GroupCalendar: React.FC<GroupCalendarProps> = ({
         />
       )}
 
-      {/* Modal: รายละเอียดกิจกรรมในแต่ละวัน */}
+      {/* 6. Modal: รายละเอียดกิจกรรมในแต่ละวัน */}
       {showDetail && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-gray-900/60 backdrop-blur-sm">
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-gray-900/60 backdrop-blur-sm"
+          onClick={() => setShowDetail(false)} // ปิด Modal เมื่อคลิกนอก
+        >
           <div
             className="bg-white w-full max-w-lg rounded-2xl shadow-2xl flex flex-col overflow-hidden max-h-[90vh]"
-            onClick={(e) => e.stopPropagation()}
+            onClick={(e) => e.stopPropagation()} // ป้องกันการปิด Modal เมื่อคลิกที่เนื้อหา
           >
             {/* Header Modal */}
             <div className="px-6 py-4 bg-white border-b border-gray-100 flex justify-between items-center shrink-0 z-10">
@@ -288,13 +312,13 @@ const GroupCalendar: React.FC<GroupCalendarProps> = ({
               <button
                 title="Close the detail modal"
                 onClick={() => setShowDetail(false)}
-                className="p-2 bg-gray-100 hover:bg-gray-200 rounded-full text-gray-500 transition-colors cursor-pointer"
+                className="w-8 h-8 flex items-center justify-center p-0 bg-gray-100 hover:bg-gray-200 rounded-full text-gray-500 text-xl transition-colors cursor-pointer leading-none"
               >
                 ✕
               </button>
             </div>
 
-            {/* Body Modal: รายการกิจกรรม */}
+            {/* Body Modal: รายการกิจกรรม (Scrollable) */}
             <div className="flex-1 overflow-y-auto p-6 bg-gray-50/50 max-h-[60vh] scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-transparent">
               <div className="space-y-3">
                 {detailEvents.length === 0 ? (
@@ -309,29 +333,44 @@ const GroupCalendar: React.FC<GroupCalendarProps> = ({
                       onClick={() => setSelectedEvent(ev)}
                       // ไฮไลต์กิจกรรมที่ถูกเลือก
                       className={`relative overflow-hidden border p-4 rounded-xl shadow-sm transition-transform hover:scale-[1.02] bg-white cursor-pointer ${
-                        selectedEvent?.id === ev.id ? "border-sky-500 ring-2 ring-sky-200" : ""
+                        selectedEvent?.id === ev.id
+                          ? "border-sky-500 ring-2 ring-sky-200"
+                          : ""
                       }`}
                     >
                       {/* แถบสีด้านซ้าย (กำหนดสีตาม Index) */}
                       <div
-                        className={`absolute left-0 top-0 bottom-0 w-1.5 ${[
-                          "bg-red-500",
-                          "bg-orange-500",
-                          "bg-amber-500",
-                        ][idx % 3]}`}
+                        className={`absolute left-0 top-0 bottom-0 w-1.5 ${
+                          [
+                            "bg-red-500",
+                            "bg-orange-500",
+                            "bg-amber-500",
+                          ][idx % 3]
+                        }`}
                       ></div>
-                      
+
                       {/* รายละเอียดกิจกรรม */}
                       <div className="pl-3">
                         <h4 className="font-bold text-lg text-gray-800 leading-tight">
                           {ev.title}
                         </h4>
                         {ev.description && (
-                          <p className="text-sm text-gray-600 mt-1.5 leading-relaxed">{ev.description}</p>
+                          <p className="text-sm text-gray-600 mt-1.5 leading-relaxed">
+                            {ev.description}
+                          </p>
                         )}
                         <div className="flex items-center gap-2 mt-3 text-xs font-medium text-gray-500 bg-gray-100 w-fit px-2 py-1 rounded-md">
                           {/* แสดงเวลาเริ่มต้น - สิ้นสุด */}
-                          🕒 {new Date(ev.start_time).toLocaleTimeString("th-TH", { hour: "2-digit", minute: "2-digit" })} - {new Date(ev.end_time).toLocaleTimeString("th-TH", { hour: "2-digit", minute: "2-digit" })}
+                          🕒{" "}
+                          {new Date(ev.start_time).toLocaleTimeString("th-TH", {
+                            hour: "2-digit",
+                            minute: "2-digit",
+                          })}{" "}
+                          -{" "}
+                          {new Date(ev.end_time).toLocaleTimeString("th-TH", {
+                            hour: "2-digit",
+                            minute: "2-digit",
+                          })}
                         </div>
                       </div>
                     </div>
@@ -340,7 +379,7 @@ const GroupCalendar: React.FC<GroupCalendarProps> = ({
               </div>
             </div>
 
-            {/* Footer Modal: ปุ่มแก้ไข/ลบ (เฉพาะเจ้าของกลุ่ม) */}
+            {/* Footer Modal: ปุ่มแก้ไข/ลบ (เฉพาะเจ้าของกลุ่มและเลือกกิจกรรมแล้ว) */}
             <div className="p-4 border-t border-gray-100 bg-white flex gap-3 shrink-0">
               {isOwner && selectedEvent && ( // แสดงเมื่อเป็นเจ้าของและเลือกกิจกรรมแล้ว
                 <>
@@ -356,9 +395,8 @@ const GroupCalendar: React.FC<GroupCalendarProps> = ({
                   </button>
                   <button
                     onClick={async () => {
-                      // ใช้ Logic การลบกิจกรรมที่เขียนแยกไว้
+                      // เรียกใช้ Logic การลบกิจกรรม
                       await handleDeleteEvent(selectedEvent.id);
-                      // ไม่จำเป็นต้องเรียก fetchEvents() ซ้ำ เพราะถูกเรียกใน handleDeleteEvent แล้ว
                     }}
                     className="flex-1 px-4 py-2.5 bg-red-600 text-white font-semibold rounded-xl hover:bg-red-700 transition-all shadow-lg shadow-red-200 cursor-pointer"
                   >
