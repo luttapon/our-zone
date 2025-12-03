@@ -100,7 +100,7 @@ const RegisterPage = () => {
     try {
       // 💡 1. กำหนด URL สำหรับ Redirect หลังการยืนยันอีเมลสำเร็จ
       //    Supabase จะ Redirect ผู้ใช้ไปที่หน้านี้เมื่อคลิกยืนยันในอีเมล
-      const redirectToUrl = `${window.location.origin}/confirmEmail?status=success`;
+      const redirectToUrl = `${window.location.origin}/confirmEmail`;
 
       // 2. เรียกใช้ Supabase Sign Up:
       const { data: authData, error: authError } = await supabase.auth.signUp({

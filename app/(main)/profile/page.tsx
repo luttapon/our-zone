@@ -593,14 +593,15 @@ export default function Page() {
               <div className="flex-shrink-0">
                 {avatarPreview ? (
                   // Preview ไฟล์ใหม่
+                  <div className="relative w-24 h-24 rounded-full overflow-hidden border-2 border-gray-300 shadow-sm flex-shrink-0">
                   <Image
                     src={avatarPreview}
                     alt="Preview avatar"
-                    width={100}
-                    height={100}
+                    fill
                     className="rounded-full border-2 border-gray-300 shadow-sm object-cover"
                     unoptimized
                   />
+                  </div>
                 ) : (
                   // Placeholder หรือรูปเดิม
                   <div className="w-24 h-24 rounded-full bg-gray-100 border-2 border-gray-300 flex items-center justify-center text-gray-400">
