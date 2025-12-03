@@ -1,19 +1,18 @@
-"use client";
+"use client"; // แจ้ง Next.js ว่าไฟล์นี้ทำงานที่ฝั่ง Browser (Client Side)
 
 import React, { useState, useEffect } from "react";
 import Image from "next/image";
 import type { User as SupabaseUser } from "@supabase/supabase-js";
-import { supabase } from "@/lib/supabase/client";
-import { useRouter } from "next/navigation";
-// นำเข้า Icon สำหรับ Loading, Heart, และ MessageSquare
-import { Loader2, Heart, MessageSquare } from "lucide-react"; 
-// นำเข้า Modal คอมเมนต์สำหรับ Dashboard
-import DashboardCommentModal from "@/app/components/DashboardCommentModal"; 
+import { supabase } from "@/lib/supabase/client"; // เครื่องมือเชื่อมต่อฐานข้อมูล Supabase
+import { useRouter } from "next/navigation"; // เครื่องมือเปลี่ยนหน้า
+import { Loader2, Heart, MessageSquare } from "lucide-react"; // ไอคอนต่างๆ
+import DashboardCommentModal from "@/app/components/DashboardCommentModal"; // Modal คอมเมนต์
 import Link from "next/link";
 
-// ----------------------------------------------------------------------
-// --- Component ย่อย: MediaModal (แสดงรูปภาพ/วิดีโอขนาดใหญ่) ---
-// ----------------------------------------------------------------------
+// ====================================================================
+// Component ย่อย: MediaModal (แสดงรูปภาพ/วิดีโอขนาดใหญ่)
+// ====================================================================
+
 const MediaModal = ({
   mediaUrl,
   onClose,
@@ -22,7 +21,8 @@ const MediaModal = ({
   onClose: () => void;
 }) => {
   if (!mediaUrl) return null;
-  // ตรวจสอบนามสกุลไฟล์ว่าเป็นวิดีโอหรือไม่
+
+  // ตรวจสอบว่าเป็นไฟล์วิดีโอหรือไม่
   const isVideo =
     mediaUrl.endsWith(".mp4") ||
     mediaUrl.endsWith(".webm") ||
@@ -31,11 +31,11 @@ const MediaModal = ({
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-90 p-4"
-      onClick={onClose}
+      onClick={onClose} // ปิดเมื่อคลิกพื้นหลัง
     >
       <div
         className="relative w-full max-w-4xl max-h-[90vh] h-full flex items-center justify-center"
-        onClick={(e) => e.stopPropagation()} // ป้องกันการปิด Modal เมื่อคลิกที่เนื้อหา
+        onClick={(e) => e.stopPropagation()} // คลิกที่เนื้อหาไม่ปิด Modal
       >
         {isVideo ? (
           // แสดงวิดีโอ
@@ -71,9 +71,9 @@ const MediaModal = ({
   );
 };
 
-// ----------------------------------------------------------------------
-// --- Types & Helpers ---
-// ----------------------------------------------------------------------
+// ====================================================================
+// ส่วนกำหนดรูปแบบข้อมูล (Interfaces & Helpers)
+// ====================================================================
 
 interface FollowedGroup {
   group_id: string;
@@ -82,7 +82,7 @@ interface OwnedGroup {
   id: string;
 }
 
-/** Helper: ดึง URL รูป Avatar กลุ่มจาก Storage */
+// ฟังก์ชันดึง URL รูปโปรไฟล์กลุ่ม
 const getGroupAvatarUrl = (avatarPath: string | null | undefined) => {
   const defaultUrl = "https://placehold.co/40x40?text=G";
   if (!avatarPath) return defaultUrl;
@@ -92,7 +92,7 @@ const getGroupAvatarUrl = (avatarPath: string | null | undefined) => {
   return data.publicUrl || defaultUrl;
 };
 
-/** Helper: ดึง URL รูป Avatar ผู้ใช้จาก Storage */
+// ฟังก์ชันดึง URL รูปโปรไฟล์ผู้ใช้
 const getProfileAvatarUrl = (avatarPath: string | null | undefined) => {
   const defaultUrl = "https://placehold.co/40x40?text=U";
   if (!avatarPath) return defaultUrl;
@@ -102,7 +102,7 @@ const getProfileAvatarUrl = (avatarPath: string | null | undefined) => {
   return data.publicUrl || defaultUrl;
 };
 
-/** Interface สำหรับข้อมูลดิบที่ดึงมาจาก Supabase (รวม joins) */
+// ข้อมูลโพสต์ดิบจาก Supabase
 interface PostFromSupabase {
   id: string;
   content: string;
@@ -112,13 +112,11 @@ interface PostFromSupabase {
   media_urls: string[] | null;
   likes: { user_id: string }[] | null;
   comments: { id: string }[] | null;
-  // ข้อมูลกลุ่ม: รวม name, avatar_url, และ owner_id
   groups: { name: string; avatar_url: string | null; owner_id: string } | null;
-  // ข้อมูลผู้โพสต์
   user: { username: string; avatar_url: string | null } | null;
 }
 
-/** Interface สำหรับ State ใน Client (ข้อมูลที่คำนวณแล้ว) */
+// ข้อมูลโพสต์ที่พร้อมใช้งานในหน้าจอ
 interface Post {
   id: string;
   content: string;
@@ -136,49 +134,45 @@ interface Post {
   group_owner_id: string; // ID เจ้าของกลุ่ม
 }
 
-// ----------------------------------------------------------------------
-// --- Component หลัก: DashboardPage ---
-// ----------------------------------------------------------------------
+// ====================================================================
+// Component หลัก: หน้าแดชบอร์ด (DashboardPage)
+// ====================================================================
+
 export default function DashboardPage() {
   const router = useRouter();
 
-  const [user, setUser] = useState<SupabaseUser | null>(null); // ข้อมูลผู้ใช้
-  const [posts, setPosts] = useState<Post[]>([]); // Feed โพสต์
-  const [loading, setLoading] = useState(true);
-  // ID โพสต์ที่ถูกเลือกเพื่อเปิด Modal คอมเมนต์
-  const [activePostIdForComments, setActivePostIdForComments] =
-    useState<string | null>(null);
+  // --- 1. การจัดการข้อมูล (State) ---
+  const [user, setUser] = useState<SupabaseUser | null>(null); // ข้อมูลผู้ใช้ปัจจุบัน
+  const [posts, setPosts] = useState<Post[]>([]);              // รายการโพสต์ที่จะแสดง
+  const [loading, setLoading] = useState(true);                // สถานะโหลดหน้าเว็บ
+  const [activePostIdForComments, setActivePostIdForComments] = useState<string | null>(null); // โพสต์ที่เปิดคอมเมนต์อยู่
 
+  // จัดการ Modal รูปภาพ
   const [showImageModal, setShowImageModal] = useState(false);
   const [modalImageUrl, setModalImageUrl] = useState("");
 
-  /** Helper: แปลง Path ใน Storage เป็น Public URL สำหรับ Post Media */
+  // ฟังก์ชันแปลง Path รูปโพสต์เป็น URL
   const getPublicMediaUrl = (urlOrPath: string) => {
     if (!urlOrPath) return "https://placehold.co/128x128?text=No+Image";
     if (urlOrPath.startsWith("http")) return urlOrPath;
 
-    const { data } = supabase.storage
-      .from("post_media")
-      .getPublicUrl(urlOrPath);
-
+    const { data } = supabase.storage.from("post_media").getPublicUrl(urlOrPath);
     return data.publicUrl || "https://placehold.co/128x128?text=No+Image";
   };
 
-  /** Handler: เปิด Modal ดูรูปภาพขยาย */
+  // เปิดดูรูปขนาดใหญ่
   const handleImageClick = (imageUrl: string) => {
     setModalImageUrl(imageUrl);
     setShowImageModal(true);
   };
 
-  // ------------------ Effect: Fetch User (Authentication) ------------------
+  // --- 2. ตรวจสอบการล็อกอิน (Effect) ---
   useEffect(() => {
     const getUser = async () => {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
+      const { data: { user } } = await supabase.auth.getUser();
 
       if (!user) {
-        router.push("/login"); // Redirect ไปหน้า Login ถ้าไม่ได้ล็อกอิน
+        router.push("/login"); // ถ้ายังไม่ล็อกอิน ให้ไปหน้า Login
         return;
       }
 
@@ -188,23 +182,24 @@ export default function DashboardPage() {
     getUser();
   }, [router]);
 
-  // ------------------ Effect: Fetch Posts (Data Retrieval) ------------------
+  // --- 3. ดึงข้อมูลโพสต์ (Effect) ---
   useEffect(() => {
-    if (!user) return; // รอจนกว่าจะดึงข้อมูล User ได้
+    if (!user) return; // รอข้อมูล User ก่อน
 
     const fetchPosts = async () => {
       try {
-        // 1. ดึง ID กลุ่มที่ติดตามและกลุ่มที่ตัวเองเป็นเจ้าของ
+        // 3.1 หา ID กลุ่มที่ผู้ใช้ติดตาม หรือเป็นเจ้าของ
         const { data: followedGroups } = (await supabase
           .from("group_members")
           .select("group_id")
           .eq("user_id", user.id)) as { data: FollowedGroup[] | null };
+        
         const { data: ownedGroups } = (await supabase
           .from("groups")
           .select("id")
           .eq("owner_id", user.id)) as { data: OwnedGroup[] | null };
         
-        // รวม ID กลุ่มทั้งหมด (ใช้ Set เพื่อให้ ID ไม่ซ้ำ)
+        // รวม ID ทั้งหมดและตัดตัวซ้ำ
         const allGroupIds = [
           ...new Set([
             ...(followedGroups?.map((g) => g.group_id) || []),
@@ -218,26 +213,22 @@ export default function DashboardPage() {
           return;
         }
 
-        // 2. ดึงโพสต์จากกลุ่มทั้งหมดที่เกี่ยวข้อง
+        // 3.2 ดึงโพสต์จากกลุ่มเหล่านั้น
         const { data: postsData } = (await supabase
           .from("posts")
           .select(
-            // Select ข้อมูลโพสต์, Likes, Comments, Groups, และ User
             `id, content, created_at, user_id, group_id, media_urls,
              likes(user_id), comments(id), groups(name, avatar_url, owner_id),
              user(username, avatar_url)`
           )
-          .in("group_id", allGroupIds) // กรองตามกลุ่มทั้งหมด
+          .in("group_id", allGroupIds) // เงื่อนไข: อยู่ในกลุ่มที่เกี่ยวข้อง
           .order("created_at", { ascending: false })) as {
           data: PostFromSupabase[] | null;
         };
 
-        // 3. Map และจัดรูปแบบข้อมูลสำหรับ UI
+        // 3.3 แปลงข้อมูลให้พร้อมแสดงผล
         const formattedPosts: Post[] =
           postsData?.map((post) => {
-            // Logic เพื่อกำหนด Avatar/Name ที่จะแสดง
-            const isOwnerPosting = post.user_id === post.groups?.owner_id;
-
             return {
               id: post.id,
               content: post.content,
@@ -247,14 +238,12 @@ export default function DashboardPage() {
               media_urls: post.media_urls,
               likesCount: post.likes?.length || 0,
               commentsCount: post.comments?.length || 0,
-              // ตรวจสอบว่าผู้ใช้ปัจจุบันกด Like โพสต์นี้หรือไม่
-              likedByUser:
-                post.likes?.some((like) => like.user_id === user.id) || false,
+              likedByUser: post.likes?.some((like) => like.user_id === user.id) || false,
               group_name: post.groups?.name || "กลุ่มไม่ทราบชื่อ",
               group_avatar_url: getGroupAvatarUrl(post.groups?.avatar_url),
               post_username: post.user?.username || "Unnamed User",
               post_user_avatar_url: getProfileAvatarUrl(post.user?.avatar_url),
-              group_owner_id: post.groups?.owner_id || "", // ID เจ้าของกลุ่ม
+              group_owner_id: post.groups?.owner_id || "",
             };
           }) || [];
 
@@ -267,15 +256,15 @@ export default function DashboardPage() {
     };
 
     fetchPosts();
-  }, [user]); // Re-run เมื่อข้อมูล User ถูกโหลด
+  }, [user]);
 
-  // ------------------ Handlers ------------------
+  // --- 4. ฟังก์ชันจัดการเหตุการณ์ (Handlers) ---
 
-  /** Handler: Like Toggle (Optimistic Update) */
+  // กดไลก์ / ยกเลิกไลก์ (Optimistic Update)
   const handleLikeToggle = async (postId: string, likedByUser: boolean) => {
     if (!user) return;
 
-    // 1. Optimistic Update: อัปเดต UI ทันที
+    // อัปเดตหน้าจอทันที
     setPosts((prev) =>
       prev.map((p) =>
         p.id === postId
@@ -290,19 +279,19 @@ export default function DashboardPage() {
 
     try {
       if (likedByUser) {
-        // Un-Like: ลบแถว
+        // ลบไลก์
         await supabase
           .from("likes")
           .delete()
           .eq("post_id", postId)
           .eq("user_id", user.id);
       } else {
-        // Like: เพิ่มแถว
+        // เพิ่มไลก์
         await supabase.from("likes").insert([{ post_id: postId, user_id: user.id }]);
       }
     } catch (err) {
       console.error("Error toggling like:", err);
-      // 2. Rollback UI (ถ้าเกิด Error)
+      // ถ้า Error ให้ย้อนค่ากลับ
       setPosts((prev) =>
         prev.map((p) =>
           p.id === postId
@@ -317,7 +306,7 @@ export default function DashboardPage() {
     }
   };
 
-  /** Handler: Update Comment Count (Callback จาก Modal) */
+  // อัปเดตจำนวนคอมเมนต์ (เมื่อปิด Modal คอมเมนต์)
   const updateCommentCount = (postId: string) => {
     setPosts((prev) =>
       prev.map((p) =>
@@ -328,7 +317,7 @@ export default function DashboardPage() {
     );
   };
 
-  // ------------------ Render ------------------
+  // --- 5. ส่วนแสดงผลหน้าจอ (Render UI) ---
 
   if (loading)
     return (
@@ -343,7 +332,7 @@ export default function DashboardPage() {
         Feed โพสต์ล่าสุด
       </h2>
       
-      {/* Image Modal */}
+      {/* Modal ดูรูปภาพขยาย */}
       {showImageModal && (
         <MediaModal
           mediaUrl={modalImageUrl}
@@ -352,7 +341,7 @@ export default function DashboardPage() {
       )}
 
       {posts.length === 0 ? (
-        // Empty State: ไม่มีโพสต์
+        // กรณีไม่มีโพสต์
         <div className="text-center py-16 bg-white rounded-2xl border-2 border-dashed border-gray-200">
           <h2 className="text-gray-900 font-semibold">ยังไม่มีโพสต์</h2>
           <p className="text-gray-500 mt-1">
@@ -360,13 +349,13 @@ export default function DashboardPage() {
           </p>
         </div>
       ) : (
-        // แสดง Feed โพสต์
+        // แสดงรายการโพสต์
         <div className="grid gap-4">
           {posts.map((post) => {
-            // Logic: ตรวจสอบว่าเป็นโพสต์จากแอดมินกลุ่ม (เจ้าของ) หรือไม่
+            // เช็คว่าเป็นเจ้าของกลุ่มโพสต์เองหรือไม่
             const isOwnerPosting = post.user_id === post.group_owner_id; 
             
-            // กำหนด Avatar/Name ที่จะแสดง: ถ้าเป็นแอดมินโพสต์ ให้ใช้ชื่อ/รูปกลุ่ม
+            // เลือกชื่อและรูปที่จะแสดง (ถ้าเจ้าของโพสต์ ให้แสดงในนามกลุ่ม)
             const avatarSrc = isOwnerPosting
               ? post.group_avatar_url
               : post.post_user_avatar_url;
@@ -379,10 +368,11 @@ export default function DashboardPage() {
                 key={post.id}
                 className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm"
               >
-                {/* Header */}
+                {/* Header ของโพสต์ */}
                 <div className="flex justify-between items-start">
                   <div className="flex items-center gap-3">
-                    {/* Avatar ผู้โพสต์/กลุ่ม */}
+                    
+                    {/* รูปโปรไฟล์ผู้โพสต์ */}
                     <div className="relative w-8 h-8 rounded-full overflow-hidden bg-gray-100 shrink-0">
                       <Image
                         src={avatarSrc}
@@ -392,20 +382,21 @@ export default function DashboardPage() {
                         unoptimized
                       />
                     </div>
+                    
                     <div>
-                      {/* ชื่อผู้โพสต์/กลุ่ม */}
+                      {/* ชื่อผู้โพสต์ */}
                       <p className="font-bold text-gray-900">{nameDisplay}</p>
-                      {/* ชื่อกลุ่มที่โพสต์ */}
+                      {/* ชื่อกลุ่ม */}
                       <p className="text-xs text-gray-500">
                         {isOwnerPosting
-                          ? "แอดมินกลุ่ม :" // ถ้าเป็นเจ้าของกลุ่มโพสต์
+                          ? "แอดมินกลุ่ม :"
                           : "โพสต์ในกลุ่ม :"}
                         <Link href={`/groups/${post.group_id}`} className="font-medium text-sky-600 hover:text-sky-700 ml-1">
                           {post.group_name}
                         </Link>
                       </p>
+                      {/* เวลาที่โพสต์ */}
                       <p className="text-xs text-gray-400">
-                        {/* แสดงวันที่ */}
                         {new Date(post.created_at).toLocaleDateString("th-TH", {
                           year: "numeric",
                           month: "long",
@@ -418,19 +409,20 @@ export default function DashboardPage() {
                   </div>
                 </div>
 
-                {/* Content */}
+                {/* เนื้อหาข้อความ */}
                 <p className="mt-2 text-gray-700 whitespace-pre-wrap">
                   {post.content}
                 </p>
 
-                {/* Media Display */}
-                {post.media_urls?.length ? (
+                {/* รูปภาพ/วิดีโอประกอบ */}
+                {post.media_urls && post.media_urls.length > 0 && (
                   <div className="flex flex-wrap gap-2 mt-3">
                     {post.media_urls.map((url, idx) => {
                       const publicUrl = getPublicMediaUrl(url);
                       const isVideo =
                         publicUrl.endsWith(".mp4") ||
-                        publicUrl.endsWith(".webm");
+                        publicUrl.endsWith(".webm") ||
+                        publicUrl.endsWith(".ogg");
 
                       return (
                         <div
@@ -449,6 +441,7 @@ export default function DashboardPage() {
                               src={publicUrl}
                               alt={`Post media ${idx}`}
                               fill
+                              sizes="128px"
                               className="object-cover"
                               unoptimized
                             />
@@ -457,11 +450,10 @@ export default function DashboardPage() {
                       );
                     })}
                   </div>
-                ) : null}
+                )}
 
-                {/* Actions */}
+                {/* ปุ่ม Like และ Comment */}
                 <div className="flex gap-4 text-gray-500 text-sm pt-3 mt-4 border-t border-gray-100">
-                  {/* Like Button */}
                   <button
                     onClick={() => handleLikeToggle(post.id, post.likedByUser)}
                     className={`flex items-center gap-1.5 transition-colors cursor-pointer ${
@@ -472,7 +464,6 @@ export default function DashboardPage() {
                     {post.likesCount} ถูกใจ
                   </button>
 
-                  {/* Comment Button (Modal Trigger) */}
                   <button
                     onClick={() => setActivePostIdForComments(post.id)}
                     className="flex items-center gap-1.5 hover:text-sky-600 cursor-pointer"
@@ -487,7 +478,7 @@ export default function DashboardPage() {
         </div>
       )}
 
-      {/* Comment Modal (แสดงที่ Root Level) */}
+      {/* Modal แสดงความคิดเห็น (Overlay) */}
       {activePostIdForComments && user && (
         <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
           <DashboardCommentModal

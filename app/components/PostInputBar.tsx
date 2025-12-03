@@ -1,112 +1,126 @@
-"use client";
+"use client"; // แจ้ง Next.js ว่าไฟล์นี้ทำงานที่ฝั่ง Browser (Client Side)
 
 import { useState, ChangeEvent } from "react";
 import Image from "next/image";
-import { supabase } from "@/lib/supabase/client";
-import type { PostWithUser } from "@/types/supabase"; // นำเข้า Type สำหรับ Post
+import { supabase } from "@/lib/supabase/client"; // เครื่องมือเชื่อมต่อฐานข้อมูล Supabase
+import type { PostWithUser } from "@/types/supabase"; // นำเข้า Type สำหรับข้อมูลโพสต์
 
-// --- กำหนด Props สำหรับ Component ---
+// ====================================================================
+// ส่วนกำหนดรูปแบบข้อมูล (Interface)
+// ====================================================================
+
+// ข้อมูลที่ Component นี้ต้องการ (Props)
 interface PostInputBarProps {
-  groupId: string;
-  userId: string; // ID ผู้ใช้ที่ล็อกอินอยู่
-  onPosted?: (newPost: PostWithUser) => void; // Callback เมื่อโพสต์สำเร็จ
+  groupId: string;      // รหัสกลุ่มที่จะโพสต์
+  userId: string;       // รหัสผู้ใช้ที่กำลังล็อกอิน
+  onPosted?: (newPost: PostWithUser) => void; // ฟังก์ชันเรียกกลับเมื่อโพสต์สำเร็จ
   
-  // Props สำหรับจัดการสิทธิ์
-  isGroupOwner: boolean; // เป็นเจ้าของกลุ่มหรือไม่
+  // ข้อมูลเกี่ยวกับสิทธิ์การใช้งาน
+  isGroupOwner: boolean;       // เป็นเจ้าของกลุ่มหรือไม่
   allowMembersToPost: boolean; // กลุ่มอนุญาตให้สมาชิกโพสต์หรือไม่
-  isFollowing: boolean; // ผู้ใช้กำลังติดตาม/เป็นสมาชิกกลุ่มหรือไม่
+  isFollowing: boolean;        // เป็นสมาชิก/ผู้ติดตามกลุ่มหรือไม่
 }
 
-export default function PostInputBar({ groupId, userId, onPosted, isGroupOwner, allowMembersToPost, isFollowing }: PostInputBarProps) {
-  // --- ส่วนจัดการ State ---
-  const [text, setText] = useState(""); // ข้อความโพสต์
-  const [files, setFiles] = useState<File[]>([]); // ไฟล์รูป/วิดีโอที่เลือก
-  const [previews, setPreviews] = useState<string[]>([]); // URL สำหรับแสดงตัวอย่าง
-  const [loading, setLoading] = useState(false); // สถานะกำลังโหลด
+// ====================================================================
+// Component หลัก: แถบเขียนโพสต์ (PostInputBar)
+// ====================================================================
 
-  // Logic การตรวจสอบสิทธิ์การโพสต์
-  // canUserPost = (เป็นเจ้าของ) OR (เป็นผู้ติดตาม/สมาชิก AND กลุ่มอนุญาตให้สมาชิกโพสต์)
+export default function PostInputBar({ groupId, userId, onPosted, isGroupOwner, allowMembersToPost, isFollowing }: PostInputBarProps) {
+  
+  // --- 1. การจัดการข้อมูล (State) ---
+  const [text, setText] = useState("");           // ข้อความในโพสต์
+  const [files, setFiles] = useState<File[]>([]); // ไฟล์รูป/วิดีโอที่เลือกไว้
+  const [previews, setPreviews] = useState<string[]>([]); // URL รูปตัวอย่าง
+  const [loading, setLoading] = useState(false);  // สถานะกำลังโหลด
+
+  // --- 2. ตรวจสอบสิทธิ์ (Logic) ---
+  
+  // ผู้ใช้โพสต์ได้ก็ต่อเมื่อ: (เป็นเจ้าของ) หรือ (เป็นสมาชิก และ กลุ่มอนุญาตให้สมาชิกโพสต์)
   const canUserPost = isGroupOwner || (isFollowing && allowMembersToPost);
   
-  // --- NEW LOGIC: การตัดสินใจแสดงผล Component (Render Control) ---
-  
-  // 1. ถ้าผู้ใช้ไม่ได้เข้าสู่ระบบ (ไม่มี userId) ไม่ว่ากรณีใดๆ ต้องไม่แสดงกล่องโพสต์
+  // --- 3. การแสดงผลตามเงื่อนไข (Render Control) ---
+
+  // กรณี 1: ถ้ายังไม่ล็อกอิน (ไม่มี userId) -> ไม่แสดงอะไรเลย
   if (!userId) {
     return null; 
   }
   
-  // 2. ถ้าผู้ใช้เข้าสู่ระบบแล้ว แต่ไม่มีสิทธิ์โพสต์ (ไม่ใช่เจ้าของ AND ไม่ใช่ผู้ติดตาม) 
-  // ตาม Logic ของกลุ่มปิด/กึ่งปิด จะไม่แสดงกล่องโพสต์
+  // กรณี 2: ถ้าไม่ใช่เจ้าของ และไม่ได้เป็นสมาชิกกลุ่ม -> ไม่แสดงอะไรเลย
   if (!isGroupOwner && !isFollowing) {
-    // ถ้าผู้ใช้ไม่ใช่เจ้าของ และไม่ได้ติดตาม/เป็นสมาชิก
     return null;
   }
   
-  // --- Logic: เมื่อมีการเลือกรูป/วิดีโอ ---
+  // --- 4. ฟังก์ชันจัดการไฟล์ (File Handlers) ---
+
+  // เมื่อเลือกไฟล์รูป/วิดีโอ
   const handleFileSelect = (e: ChangeEvent<HTMLInputElement>) => {
-    // โค้ดนี้จะทำงานเมื่อผู้ใช้คลิกเลือกไฟล์ผ่าน Input ที่ถูกซ่อนไว้
     const selectedFiles = Array.from(e.target.files || []);
+    
+    // เพิ่มไฟล์ใหม่เข้าไปในรายการเดิม
     setFiles((prev) => [...prev, ...selectedFiles]);
     
-    // สร้าง Blob URL เพื่อแสดงตัวอย่างทันที
+    // สร้าง URL ชั่วคราวสำหรับแสดงตัวอย่าง
     const newPreviews = selectedFiles.map((f) => URL.createObjectURL(f));
     setPreviews((prev) => [...prev, ...newPreviews]);
   };
 
-  // --- Logic: ลบสื่อที่เลือกไว้ออก ---
+  // ลบไฟล์ที่เลือกไว้ออก
   const removeMedia = (index: number) => {
-    // คืน Memory ให้ Browser ก่อนลบ
+    // คืนหน่วยความจำของ Browser
     URL.revokeObjectURL(previews[index]); 
-    // อัปเดต State โดยกรอง Index ที่ถูกลบออก
+    
+    // ลบไฟล์และตัวอย่างออกจากรายการตาม Index
     setFiles((prev) => prev.filter((_, i) => i !== index));
     setPreviews((prev) => prev.filter((_, i) => i !== index));
   };
 
-  // --- Logic: อัปโหลดไฟล์ไปยัง Supabase Storage ---
+  // อัปโหลดไฟล์ไปยัง Supabase Storage
   const uploadMedia = async (): Promise<string[]> => {
     const urls: string[] = [];
     
     for (const file of files) {
+      // ตั้งชื่อไฟล์ใหม่ให้ไม่ซ้ำกัน
       const fileExt = file.name.split('.').pop();
       const uniqueName = `${crypto.randomUUID()}.${fileExt}`;
-      const filePath = `posts/${uniqueName}`; // Path ที่ใช้เก็บใน Bucket
+      const filePath = `posts/${uniqueName}`;
 
-      // กำหนด Metadata สำหรับไฟล์ (สำคัญสำหรับ RLS Policy ถ้ามีการตรวจสอบ user_id)
+      // ตั้งค่า Metadata เพื่อใช้ตรวจสอบสิทธิ์ (RLS Policy)
       const fileOptions = {
         cacheControl: '3600',
         upsert: false,
         metadata: {
-          user_id: userId // แนบ user ID เข้าไปใน metadata
+          user_id: userId // แนบ ID ผู้ใช้ไปกับไฟล์
         }
       };
 
-      // อัปโหลดไปยัง Bucket "post_media"
+      // อัปโหลดไฟล์
       const { error } = await supabase.storage
         .from("post_media")
         .upload(filePath, file, fileOptions);
 
       if (!error) {
-        // ดึง Public URL ของไฟล์ที่อัปโหลดเสร็จแล้ว
+        // ถ้าสำเร็จ ให้ดึง URL สาธารณะของไฟล์ออกมาเก็บไว้
         const { data } = supabase.storage.from("post_media").getPublicUrl(filePath);
         if (data.publicUrl) urls.push(data.publicUrl);
       } else {
         console.error("Error uploading file:", error.message);
       }
     }
-    return urls; // คืนค่า Array ของ URL ที่อัปโหลดสำเร็จ
+    return urls; // ส่งกลับรายการ URL ทั้งหมดที่อัปโหลดได้
   };
 
-  // --- Logic: บันทึกโพสต์ (Submit) ---
+  // --- 5. ฟังก์ชันส่งโพสต์ (Submit Handler) ---
+
   const handleSubmit = async () => {
-    // ป้องกันการส่งโพสต์ว่างเปล่า หรือผู้ใช้ไม่มีสิทธิ์
+    // ตรวจสอบความถูกต้อง: ต้องมีสิทธิ์ และ (ต้องมีข้อความ หรือ มีไฟล์)
     if (!canUserPost || (!text.trim() && files.length === 0)) return;
     
-    setLoading(true);
+    setLoading(true); // เริ่มโหลด
 
-    // 1. อัปโหลดรูปภาพ/วิดีโอทั้งหมดก่อน
+    // ขั้นตอนที่ 1: อัปโหลดรูป/วิดีโอก่อน
     const mediaUrls = await uploadMedia();
 
-    // 2. บันทึกข้อมูลโพสต์ลงฐานข้อมูล
+    // ขั้นตอนที่ 2: บันทึกข้อมูลโพสต์ลงฐานข้อมูล
     const { data, error } = await supabase
       .from("posts")
       .insert({
@@ -115,11 +129,11 @@ export default function PostInputBar({ groupId, userId, onPosted, isGroupOwner, 
         content: text.trim(),
         media_urls: mediaUrls,
       })
-      // Join เอาข้อมูลผู้โพสต์มาด้วยเพื่อใช้แสดงผลในหน้าหลักทันที (Optimistic Update)
+      // ดึงข้อมูลผู้โพสต์กลับมาด้วยเลย เพื่อให้หน้าจอแสดงผลได้ทันที
       .select("*, user:user_id(id, username, avatar_url, created_at)") 
-      .single(); // ดึงข้อมูลกลับมาแค่แถวเดียว
+      .single();
 
-    setLoading(false);
+    setLoading(false); // หยุดโหลด
 
     if (error) {
       console.error("Error inserting post:", error);
@@ -127,21 +141,21 @@ export default function PostInputBar({ groupId, userId, onPosted, isGroupOwner, 
       return;
     }
 
-    // 3. เคลียร์ค่าในฟอร์มหลังจากโพสต์สำเร็จ
+    // ขั้นตอนที่ 3: ล้างค่าในฟอร์ม
     setText("");
     setFiles([]);
-    previews.forEach(URL.revokeObjectURL); // ล้าง Blob URLs
+    previews.forEach(URL.revokeObjectURL); // ล้างหน่วยความจำ URL
     setPreviews([]);
 
-    // 4. แจ้ง Component แม่ (Parent) ว่ามีโพสต์ใหม่
+    // ขั้นตอนที่ 4: แจ้ง Component แม่ว่ามีโพสต์ใหม่แล้ว
     if (onPosted && data) {
-      // จัดรูปแบบข้อมูลให้ตรงกับ PostWithUser Type
+      // จัดเตรียมข้อมูลโพสต์ใหม่ให้ครบถ้วนตาม Type
       const newPost: PostWithUser = {
         ...data,
         media_urls: data.media_urls || [],
         likes_count: 0,
         liked_by_user: false,
-        comments: [], // เนื่องจากเพิ่งโพสต์ จึงไม่มีคอมเมนต์
+        comments: [], // โพสต์ใหม่ยังไม่มีคอมเมนต์
         user: data.user || {
           id: userId,
           username: "Unknown",
@@ -153,86 +167,87 @@ export default function PostInputBar({ groupId, userId, onPosted, isGroupOwner, 
     }
   };
 
+  // --- 6. ส่วนแสดงผลหน้าจอ (Render UI) ---
   return (
-  // --- Container หลัก ---
-  <div className="bg-white p-5 rounded-3xl shadow-md mb-5 border border-gray-200 flex flex-col gap-4 transition-all hover:shadow-lg">
-    
-    {/* ⚠️ แจ้งเตือนสิทธิ์ (แสดงเมื่อผู้ใช้ไม่สามารถโพสต์ได้ แต่ยังเห็นกล่อง) */}
-    {!canUserPost && (
-      <div className="p-3 bg-red-50 text-red-700 rounded-xl text-sm font-medium border border-red-100 flex items-center gap-2">
-        <span className="text-xl">⚠️</span>
-        กลุ่มนี้ถูกตั้งค่าให้มีเฉพาะเจ้าของเท่านั้นที่สามารถโพสต์ได้
-      </div>
-    )}
-
-    {/* ช่องเขียนโพสต์ */}
-    <textarea
-      value={text}
-      onChange={(e) => setText(e.target.value)}
-      placeholder="💭 เขียนอะไรสักอย่าง..."
-      className="w-full border border-gray-300 rounded-2xl p-4 outline-none resize-none focus:ring-2 focus:ring-blue-400 focus:border-blue-400 disabled:bg-gray-50 disabled:cursor-not-allowed transition-all"
-      rows={4}
-      disabled={!canUserPost || loading}
-    />
-
-    {/* ตัวอย่างสื่อ (Previews) */}
-    {previews.length > 0 && (
-      <div className="flex flex-wrap gap-3 mt-2">
-        {previews.map((url, i) => (
-          <div key={i} className="relative w-32 h-32 rounded-xl overflow-hidden shadow-sm border border-gray-200">
-            {/* ปุ่มลบ */}
-            <button
-              type="button"
-              onClick={() => removeMedia(i)}
-              className="absolute top-1 right-1 bg-gray-800 text-white rounded-full w-6 h-6 flex items-center justify-center text-xs hover:bg-gray-900 z-10"
-              title="ลบสื่อ"
-            >
-              ×
-            </button>
-
-            {/* วิดีโอหรือรูป (ตรวจสอบ Mime Type) */}
-            {files[i].type.startsWith("video") ? (
-              <video src={url} controls className="w-full h-full object-cover rounded-xl" />
-            ) : (
-              // ใช้ Next/Image สำหรับรูปภาพ
-              <Image src={url} alt="Preview" fill className="object-cover rounded-xl" unoptimized />
-            )}
-          </div>
-        ))}
-      </div>
-    )}
-
-    {/* ปุ่มเครื่องมือด้านล่าง */}
-    <div className="flex justify-between items-center mt-3">
+    <div className="bg-white p-5 rounded-3xl shadow-md mb-5 border border-gray-200 flex flex-col gap-4 transition-all hover:shadow-lg">
       
-      {/* ปุ่มเพิ่มรูป/วิดีโอ (ใช้ Label ครอบ Input Type="file") */}
-      <label
-        className={`cursor-pointer flex items-center gap-1 text-blue-600 font-semibold transition-all active:scale-95 ${
-          canUserPost ? 'hover:text-blue-700 hover:underline' : 'opacity-50 cursor-not-allowed'
-        }`}
-      >
-        📸 เพิ่มรูป / 🎬 วิดีโอ
-        <input
-          type="file"
-          className="hidden"
-          accept="image/*,video/*"
-          multiple
-          onChange={handleFileSelect}
-          disabled={!canUserPost || loading}
-        />
-      </label>
+      {/* ส่วนแจ้งเตือน: กรณีเห็นกล่องแต่ไม่มีสิทธิ์โพสต์ */}
+      {!canUserPost && (
+        <div className="p-3 bg-red-50 text-red-700 rounded-xl text-sm font-medium border border-red-100 flex items-center gap-2">
+          <span className="text-xl">⚠️</span>
+          กลุ่มนี้ถูกตั้งค่าให้มีเฉพาะเจ้าของเท่านั้นที่สามารถโพสต์ได้
+        </div>
+      )}
 
-      {/* ปุ่มโพสต์ */}
-      <button
-        type="button"
-        onClick={handleSubmit}
-        // ปุ่ม Disabled ถ้า: กำลังโหลด, ข้อความว่างเปล่า/ไม่มีไฟล์, หรือไม่มีสิทธิ์โพสต์
-        disabled={loading || (!text.trim() && files.length === 0) || !canUserPost}
-        className="bg-blue-600 text-white px-5 py-2 rounded-2xl disabled:opacity-50 hover:bg-blue-700 transition hover:scale-105 flex items-center gap-2 font-medium"
-      >
-        {loading ? "⏳ กำลังโพสต์..." : "🚀 โพสต์"}
-      </button>
+      {/* ช่องพิมพ์ข้อความ */}
+      <textarea
+        value={text}
+        onChange={(e) => setText(e.target.value)}
+        placeholder="💭 เขียนอะไรสักอย่าง..."
+        className="w-full border border-gray-300 rounded-2xl p-4 outline-none resize-none focus:ring-2 focus:ring-blue-400 focus:border-blue-400 disabled:bg-gray-50 disabled:cursor-not-allowed transition-all"
+        rows={4}
+        disabled={!canUserPost || loading} // ปิดการใช้งานถ้าไม่มีสิทธิ์ หรือกำลังโหลด
+      />
+
+      {/* ส่วนแสดงตัวอย่างรูป/วิดีโอที่เลือกไว้ */}
+      {previews.length > 0 && (
+        <div className="flex flex-wrap gap-3 mt-2">
+          {previews.map((url, i) => (
+            <div key={i} className="relative w-32 h-32 rounded-xl overflow-hidden shadow-sm border border-gray-200">
+              
+              {/* ปุ่มกากบาทมุมขวาบนเพื่อลบรูป */}
+              <button
+                type="button"
+                onClick={() => removeMedia(i)}
+                className="absolute top-1 right-1 bg-gray-800 text-white rounded-full w-6 h-6 flex items-center justify-center text-xs hover:bg-gray-900 z-10"
+                title="ลบสื่อ"
+              >
+                ×
+              </button>
+
+              {/* แสดงผลตามประเภทไฟล์ (วิดีโอ หรือ รูปภาพ) */}
+              {files[i].type.startsWith("video") ? (
+                <video src={url} controls className="w-full h-full object-cover rounded-xl" />
+              ) : (
+                <Image src={url} alt="Preview" fill className="object-cover rounded-xl" unoptimized />
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* แถบเครื่องมือด้านล่าง */}
+      <div className="flex justify-between items-center mt-3">
+        
+        {/* ปุ่มเพิ่มรูป/วิดีโอ */}
+        <label
+          className={`cursor-pointer flex items-center gap-1 text-blue-600 font-semibold transition-all active:scale-95 ${
+            canUserPost ? 'hover:text-blue-700 hover:underline' : 'opacity-50 cursor-not-allowed'
+          }`}
+        >
+          📸 เพิ่มรูป / 🎬 วิดีโอ
+          {/* Input file ถูกซ่อนไว้ แต่ทำงานเมื่อกด Label */}
+          <input
+            type="file"
+            className="hidden"
+            accept="image/*,video/*"
+            multiple
+            onChange={handleFileSelect}
+            disabled={!canUserPost || loading}
+          />
+        </label>
+
+        {/* ปุ่มโพสต์ */}
+        <button
+          type="button"
+          onClick={handleSubmit}
+          // ปิดปุ่มถ้า: กำลังโหลด, ไม่มีข้อมูลจะส่ง, หรือไม่มีสิทธิ์โพสต์
+          disabled={loading || (!text.trim() && files.length === 0) || !canUserPost}
+          className="bg-blue-600 text-white px-5 py-2 rounded-2xl disabled:opacity-50 hover:bg-blue-700 transition hover:scale-105 flex items-center gap-2 font-medium"
+        >
+          {loading ? "⏳ กำลังโพสต์..." : "🚀 โพสต์"}
+        </button>
+      </div>
     </div>
-  </div>
-);
+  );
 }

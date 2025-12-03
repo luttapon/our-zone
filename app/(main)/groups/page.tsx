@@ -1,66 +1,69 @@
-'use client'
+'use client' // แจ้ง Next.js ว่าไฟล์นี้ทำงานที่ฝั่ง Browser (Client Side)
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
-import { supabase } from '@/lib/supabase/client'
-import { UsersRound } from 'lucide-react'
+import { supabase } from '@/lib/supabase/client' // เครื่องมือเชื่อมต่อฐานข้อมูล Supabase
+import { UsersRound } from 'lucide-react' // ไอคอนต่างๆ
 
-// ----------------------------------------------------------------------
-// --- กำหนดโครงสร้างข้อมูลกลุ่ม (Interface) ---
-// ----------------------------------------------------------------------
+// ====================================================================
+// ส่วนกำหนดรูปแบบข้อมูล (Interface)
+// ====================================================================
+
+// โครงสร้างข้อมูลของ "กลุ่ม" ที่ดึงมาจากฐานข้อมูล
 interface Group {
   id: string
   name: string
   description: string | null
-  avatar_url: string | null
-  cover_url: string | null
+  avatar_url: string | null // ที่อยู่ไฟล์รูปโปรไฟล์
+  cover_url: string | null  // ที่อยู่ไฟล์รูปปก
   owner_id: string
 }
 
-// ----------------------------------------------------------------------
-// --- Component หลัก: GroupsPage (หน้าแสดงกลุ่มทั้งหมด) ---
-// ----------------------------------------------------------------------
-export default function GroupsPage() {
-  // --- State: จัดการข้อมูลและสถานะ ---
-  const [groups, setGroups] = useState<Group[]>([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState('')
+// ====================================================================
+// Component หลัก: หน้าแสดงกลุ่มทั้งหมด (GroupsPage)
+// ====================================================================
 
-  // --- Effect: โหลดข้อมูลกลุ่มทั้งหมดเมื่อเข้าสู่หน้าเว็บ ---
+export default function GroupsPage() {
+  
+  // --- 1. การจัดการข้อมูล (State) ---
+  const [groups, setGroups] = useState<Group[]>([]) // เก็บรายการกลุ่มทั้งหมด
+  const [loading, setLoading] = useState(true)      // สถานะกำลังโหลด
+  const [error, setError] = useState('')            // ข้อความ Error
+
+  // --- 2. โหลดข้อมูลเมื่อเข้าสู่หน้าเว็บ (Effect) ---
   useEffect(() => {
     const fetchGroups = async () => {
-      setLoading(true)
-      setError('')
+      setLoading(true) // เริ่มโหลด
+      setError('')     // ล้าง Error เก่า
 
-      // Query: ดึงข้อมูลจากตาราง 'groups' ทั้งหมด
+      // ดึงข้อมูลจากตาราง 'groups' ทั้งหมด
       const { data, error } = await supabase
         .from('groups')
         .select('*')
-        .order('name', { ascending: true }) // เรียงตามชื่อกลุ่ม
+        .order('name', { ascending: true }) // เรียงตามชื่อ ก-ฮ
 
       if (error) {
         console.error('Error fetching groups:', error.message)
         setError('เกิดข้อผิดพลาดในการโหลดกลุ่ม')
       } else {
-        // อัปเดต State ด้วยข้อมูลที่ดึงมา
+        // บันทึกข้อมูลลง State (ถ้าไม่มีข้อมูลให้เป็น Array ว่าง)
         setGroups((data as Group[]) || [])
       }
-      setLoading(false)
+      setLoading(false) // โหลดเสร็จสิ้น
     }
 
     fetchGroups()
-  }, []) // ทำงานเมื่อ Component Mount ครั้งเดียว
+  }, []) // ทำงานแค่ครั้งเดียวตอนเปิดหน้านี้
 
-  // URL Placeholder สำหรับกรณีที่ไม่พบรูปภาพ
+  // กำหนดรูปภาพเริ่มต้น (กรณีไม่มีรูป)
   const avatarPlaceholder = "https://placehold.co/150x150?text=No+Avatar";
   const coverPlaceholder = "https://placehold.co/600x400/e2e8f0/94a3b8?text=No+Cover";
 
-  // --- Render (JSX) ---
+  // --- 3. ส่วนแสดงผลหน้าจอ (Render UI) ---
   return (
-    // --- Container หลัก ---
     <div className="min-h-screen bg-gray-50 p-10 flex flex-col items-center">
       
-      {/* ส่วนหัว (Header) */}
+      {/* ส่วนหัวข้อหน้าเว็บ */}
       <div className="bg-gradient-to-r from-sky-500 to-blue-600 rounded-2xl p-8 shadow-lg mb-8 w-full max-w-6xl">
         <h1 className="text-4xl font-extrabold text-white tracking-tight text-center">
           👥 กลุ่มทั้งหมด
@@ -70,18 +73,19 @@ export default function GroupsPage() {
         </p>
       </div>
 
-      {/* สถานะ Loading และ Error */}
+      {/* แสดงสถานะ Loading หรือ Error */}
       {loading && <p className="text-center text-gray-500">กำลังโหลด...</p>}
       {error && <p className="text-center text-red-500">{error}</p>}
 
-      {/* Grid แสดงรายการกลุ่ม */}
+      {/* ตารางแสดงรายการกลุ่ม (Grid Layout) */}
       <div className="flex flex-wrap justify-center gap-6 w-full max-w-6xl">
         {groups.map((group) => {
-          // 1. เตรียม URL รูปภาพ Avatar
+          
+          // แปลง Path รูปโปรไฟล์เป็น URL ที่ใช้งานได้
           const { data: avatarData } = supabase.storage.from('groups').getPublicUrl(group.avatar_url || 'no-path');
           const avatarUrl = group.avatar_url ? avatarData.publicUrl : avatarPlaceholder;
           
-          // 2. เตรียม URL รูปภาพ Cover
+          // แปลง Path รูปปกเป็น URL ที่ใช้งานได้
           const { data: coverData } = supabase.storage.from('groups').getPublicUrl(group.cover_url || 'no-path');
           const coverUrl = group.cover_url ? coverData.publicUrl : coverPlaceholder;
 
@@ -90,30 +94,29 @@ export default function GroupsPage() {
               key={group.id}
               className="w-52 h-60 rounded-2xl shadow-md overflow-hidden cursor-pointer transform hover:scale-105 transition relative bg-gray-200 group/card"
               style={{
-                // กำหนด Cover เป็น Background Image
+                // ใช้รูปปกเป็นพื้นหลังของการ์ด
                 backgroundImage: `url('${coverUrl}')`,
                 backgroundSize: 'cover',
                 backgroundPosition: 'center',
               }}
             >
-              {/* Overlay สีดำจางๆ เพื่อให้อ่านตัวหนังสือชัดขึ้น */}
+              {/* เลเยอร์สีดำจางๆ ทับพื้นหลังเพื่อให้ตัวหนังสือเด่นขึ้น */}
               <div className="absolute inset-0 bg-black/40 group-hover/card:bg-black/50 transition-colors"></div>
               
-              {/* เนื้อหา Card (ใช้ relative เพื่อจัดตำแหน่งเหนือ Overlay) */}
+              {/* เนื้อหาภายในการ์ด */}
               <div className='relative flex flex-col items-center h-full pt-4'>
-                {/* รูปโปรไฟล์กลุ่ม (Avatar Bubble) */}
+                
+                {/* รูปโปรไฟล์กลุ่ม (วงกลม) */}
                 <div className="w-20 h-20 rounded-full overflow-hidden border-4 border-white shadow-lg aspect-square shrink-0 bg-white">
                   {group.avatar_url ? (
-                    // แสดง Avatar ถ้ามี
                     <img 
                       src={avatarUrl} 
                       alt={group.name} 
                       className="w-full h-full object-cover" 
-                      // Fallback: หากโหลดรูปไม่สำเร็จ ให้แสดง Placeholder
+                      // ถ้าโหลดรูปไม่สำเร็จ ให้ใช้รูป Placeholder แทน
                       onError={(e) => { e.currentTarget.src = avatarPlaceholder; }}
                     />
                   ) : (
-                    // แสดง Placeholder Icon
                     <div className="w-full h-full bg-gray-300 flex items-center justify-center">
                       <UsersRound className="w-10 h-10 text-gray-600" />
                     </div>
@@ -125,7 +128,7 @@ export default function GroupsPage() {
                   {group.name}
                 </h2>
 
-                {/* ปุ่มดูรายละเอียด (Link) */}
+                {/* ปุ่มกดดูรายละเอียด */}
                 <Link
                   href={`/groups/${group.id}`}
                   className="absolute bottom-4 w-40 text-center bg-sky-600 text-white py-2 rounded-xl font-medium hover:bg-sky-700 transition shadow-lg"
@@ -137,13 +140,6 @@ export default function GroupsPage() {
           )
         })}
       </div>
-
-      {/* ข้อความแจ้งเตือนเมื่อไม่มีกลุ่ม */}
-      {!loading && groups.length === 0 && (
-        <p className="text-center text-gray-400 mt-10 text-lg">
-          ยังไม่มีกลุ่มในระบบ
-        </p>
-      )}
     </div>
   )
 }

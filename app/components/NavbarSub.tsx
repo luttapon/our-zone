@@ -1,98 +1,86 @@
-"use client";
+"use client"; // แจ้ง Next.js ว่าไฟล์นี้ทำงานที่ฝั่ง Browser (Client Side)
 
 import Link from "next/link";
 import Image from "next/image";
 import { useEffect, useState } from "react";
-// Import Supabase client
-import { supabase } from "@/lib/supabase/client"; 
-// Import Context สำหรับกลุ่มที่ติดตาม
-import { useFollowedGroups } from "@/lib/context/FollowedGroupsContext";
-// Import Hook สำหรับดึง Pathname ปัจจุบัน
-import { usePathname } from "next/navigation";
-// Import Type สำหรับ Realtime Channel ของ Supabase
-import type { RealtimeChannel } from "@supabase/supabase-js";
-// Icon แสดงกลุ่ม
-import { UsersRound } from "lucide-react";
-// Hook สำหรับตรวจสอบทิศทางการเลื่อน
-import { useScrollDirection } from "@/lib/hooks/useScrollDirection";
+import { supabase } from "@/lib/supabase/client"; // เครื่องมือเชื่อมต่อฐานข้อมูล Supabase
+import { useFollowedGroups } from "@/lib/context/FollowedGroupsContext"; // Context เก็บข้อมูลกลุ่มที่ติดตาม
+import { usePathname } from "next/navigation"; // Hook ดู URL ปัจจุบัน
+import type { RealtimeChannel } from "@supabase/supabase-js"; // Type สำหรับระบบ Realtime
+import { UsersRound } from "lucide-react"; // ไอคอนรูปกลุ่มคน
+import { useScrollDirection } from "@/lib/hooks/useScrollDirection"; // Hook ตรวจสอบการเลื่อนหน้าจอ
 
-// ----------------------------------------------------------------------
-// --- กำหนดโครงสร้างข้อมูล (Types) 
-// ----------------------------------------------------------------------
+// ====================================================================
+// ส่วนกำหนดรูปแบบข้อมูล (Types)
+// ====================================================================
 
-/** โครงสร้างข้อมูลพื้นฐานของ Group ที่ติดตาม */
+// ข้อมูลพื้นฐานของกลุ่ม
 interface Group {
   id: string;
   name: string;
   avatar_url: string | null;
-  owner_id: string; // ID เจ้าของกลุ่ม
+  owner_id: string; // รหัสเจ้าของกลุ่ม
 }
 
-/** โครงสร้างข้อมูลสถานะการอ่านล่าสุดของผู้ใช้ต่อกลุ่ม */
+// ข้อมูลสถานะการอ่านของ User ในแต่ละกลุ่ม
 interface UserGroupReadStatus {
   group_id: string;
-  last_read_at: string; // Timestamp ของการอ่านล่าสุด
+  last_read_at: string; // เวลาที่อ่านล่าสุด
 }
 
-// ----------------------------------------------------------------------
-// --- Component หลัก: แถบนำทางรอง (แสดงกลุ่มที่ติดตาม) 
-// ----------------------------------------------------------------------
+// ====================================================================
+// Component หลัก: แถบนำทางรอง (NavbarSub)
+// ====================================================================
 
 export const NavbarSub = () => {
-  // --- Context & Hooks ---
-  const { groups } = useFollowedGroups(); // ดึงรายชื่อกลุ่มที่ติดตามจาก Context
-  const pathname = usePathname();         // ดึง URL path ปัจจุบัน
   
-  // ใช้ Hook เพื่อตรวจสอบทิศทางการเลื่อน
-  const isScrollingUp = useScrollDirection();
+  // --- 1. การจัดการข้อมูล (Hooks & State) ---
+  const { groups } = useFollowedGroups(); // ดึงรายชื่อกลุ่มที่ติดตาม
+  const pathname = usePathname();         // ดึง URL ปัจจุบัน
+  const isScrollingUp = useScrollDirection(); // ตรวจสอบว่ากำลังเลื่อนขึ้นหรือไม่
 
-  // --- State Management ---
-  // เก็บจำนวนโพสต์ที่ยังไม่อ่าน: { groupId: count }
+  // เก็บจำนวนโพสต์ที่ยังไม่อ่านของแต่ละกลุ่ม { idกลุ่ม: จำนวน }
   const [unreadCounts, setUnreadCounts] = useState<Record<string, number>>({});
-  const [userId, setUserId] = useState<string | null>(null);         // เก็บ ID ผู้ใช้ปัจจุบัน
-  // สถานะควบคุมการแสดง/ซ่อนแถบแสดงกลุ่มที่ติดตาม
-  const [isGroupsVisible, setIsGroupsVisible] = useState(true); 
+  const [userId, setUserId] = useState<string | null>(null); // เก็บ ID ผู้ใช้
+  const [isGroupsVisible, setIsGroupsVisible] = useState(false); // สถานะเปิด/ปิดแถบแสดงกลุ่ม
 
-  // --- Effect: ดึง User ID เมื่อ Component Mount ---
+  // --- 2. โหลดข้อมูลผู้ใช้ (Effect) ---
   useEffect(() => {
-    // ดึง session ปัจจุบันจาก Supabase เพื่อรับ User ID
+    // ดึง Session เพื่อเอา User ID
     supabase.auth.getSession().then(({ data: { session } }) => {
       setUserId(session?.user?.id || null);
     });
-  }, []); // [] = ทำงานเมื่อ Mount ครั้งเดียวเท่านั้น
+  }, []);
 
-  // --- Logic: ทำเครื่องหมายว่าอ่านกลุ่มนี้แล้ว (เมื่อคลิกเข้ากลุ่ม) ---
+  // --- 3. ฟังก์ชันทำเครื่องหมายว่าอ่านแล้ว (เมื่อคลิกเข้ากลุ่ม) ---
   const markGroupAsRead = async (groupId: string) => {
     if (!userId) return;
 
-    // 1. อัปเดต/สร้าง (Upsert) เวลาอ่านล่าสุดลงในตาราง user_group_read_status
+    // บันทึกเวลาอ่านล่าสุดลงฐานข้อมูล (ถ้ามีอยู่แล้วจะอัปเดตแทน)
     await supabase.from("user_group_read_status").upsert(
       [
         {
           user_id: userId,
           group_id: groupId,
-          last_read_at: new Date().toISOString(),
+          last_read_at: new Date().toISOString(), // เวลาปัจจุบัน
         },
       ],
-      // ระบุคอลัมน์ที่ใช้ในการตรวจสอบ Conflict (คู่ user_id, group_id ต้องไม่ซ้ำกัน)
-      { onConflict: "user_id,group_id" }
+      { onConflict: "user_id,group_id" } // เงื่อนไขป้องกันข้อมูลซ้ำ
     );
 
-    // 2. รีเซ็ตตัวเลขแจ้งเตือนใน State เป็น 0 ทันที เพื่ออัปเดต UI ให้แสดง 0
+    // รีเซ็ตตัวเลขแจ้งเตือนในหน้าจอให้เป็น 0 ทันที
     setUnreadCounts((prev) => ({
       ...prev,
       [groupId]: 0,
     }));
   };
 
-  // --- Effect: คำนวณจำนวนโพสต์ที่ยังไม่อ่าน & ตั้งค่า Realtime Listener ---
+  // --- 4. โหลดจำนวนโพสต์ที่ยังไม่อ่าน & ตั้งค่า Realtime (Effect) ---
   useEffect(() => {
-    // หยุดทำงานถ้ายังไม่มีกลุ่มที่ติดตาม หรือยังไม่ทราบ User ID
-    if (groups.length === 0 || !userId) return;
+    if (groups.length === 0 || !userId) return; // ถ้าไม่มีข้อมูลก็จบการทำงาน
 
-    // ฟังก์ชันดึงจำนวนโพสต์ที่ยังไม่อ่านสำหรับทุกกลุ่มที่ติดตาม
     const fetchUnreadCounts = async () => {
-      // 1. ดึงข้อมูลเวลาอ่านล่าสุด (last_read_at) ของผู้ใช้สำหรับกลุ่มที่ติดตามทั้งหมด
+      // 4.1 ดึงเวลาที่อ่านล่าสุดของทุกกลุ่มที่ติดตาม
       const { data: readStatusData } = (await supabase
         .from("user_group_read_status")
         .select("group_id, last_read_at")
@@ -104,19 +92,19 @@ export const NavbarSub = () => {
 
       const counts: Record<string, number> = {};
 
-      // 2. วนลูปแต่ละกลุ่มเพื่อรับจำนวนโพสต์ใหม่ที่สร้างขึ้นหลังเวลาอ่านล่าสุด
+      // 4.2 วนลูปนับจำนวนโพสต์ใหม่ในแต่ละกลุ่ม
       for (const group of groups) {
         const status = readStatusData?.find((s) => s.group_id === group.id);
         const lastReadTime = status?.last_read_at;
 
-        // Base Query: นับจำนวนโพสต์ทั้งหมดของกลุ่ม ยกเว้นโพสต์ที่ผู้ใช้ปัจจุบันสร้าง (Self-post)
+        // สร้างคำสั่งนับจำนวนโพสต์ (ไม่นับโพสต์ของตัวเอง)
         let query = supabase
           .from("posts")
-          .select("id", { count: "exact", head: true }) // นับจำนวนอย่างเดียว (optimization)
+          .select("id", { count: "exact", head: true }) // นับจำนวนอย่างเดียว ไม่เอาข้อมูล
           .eq("group_id", group.id)
-          .neq("user_id", userId); // ไม่นับโพสต์ของตัวเอง
+          .neq("user_id", userId);
 
-        // ถ้ามีเวลาอ่านล่าสุด (lastReadTime) ให้เพิ่มเงื่อนไข: โพสต์ต้องใหม่กว่าเวลานั้น
+        // ถ้ารู้เวลาอ่านล่าสุด -> นับเฉพาะโพสต์ที่ใหม่กว่าเวลานั้น
         if (lastReadTime) query = query.gt("created_at", lastReadTime);
 
         const { count, error } = await query;
@@ -125,64 +113,57 @@ export const NavbarSub = () => {
           console.error(`Error fetching post count for ${group.id}:`, error);
           counts[group.id] = 0;
         } else {
-          // เงื่อนไขพิเศษ: ถ้าผู้ใช้อยู่ในหน้ากลุ่มนั้นอยู่แล้ว หรือเป็นเจ้าของกลุ่ม
-          // ให้ถือว่าอ่านแล้ว (เพื่อป้องกันการแสดง Badge เมื่ออยู่ในกลุ่ม)
+          // ถ้ากำลังดูหน้ากลุ่มนั้นอยู่ หรือเป็นเจ้าของกลุ่ม -> ถือว่าอ่านแล้ว (0)
           if (pathname === `/groups/${group.id}` || group.owner_id === userId) {
             counts[group.id] = 0;
           } else {
-            // บันทึกจำนวนโพสต์ที่ยังไม่อ่าน
             counts[group.id] = count ?? 0;
           }
         }
       }
-
-      setUnreadCounts(counts);
+      setUnreadCounts(counts); // อัปเดต State
     };
 
     fetchUnreadCounts();
 
-    // --- Realtime Listener: ฟัง event โพสต์ใหม่ ---
+    // --- 4.3 ระบบ Realtime (แจ้งเตือนทันทีเมื่อมีโพสต์ใหม่) ---
     const channel: RealtimeChannel = supabase
-      .channel("group_unread_counter") // ตั้งชื่อ Channel
+      .channel("group_unread_counter")
       .on(
         "postgres_changes",
         {
-          event: "INSERT", // ฟังเฉพาะ Event สร้าง (INSERT)
+          event: "INSERT", // ฟังเฉพาะการเพิ่มข้อมูล (โพสต์ใหม่)
           schema: "public",
           table: "posts",
-          // กรอง: ฟังเฉพาะกลุ่มที่อยู่ในรายชื่อกลุ่มที่ติดตามเท่านั้น
+          // กรองเฉพาะกลุ่มที่ติดตามอยู่
           filter: `group_id=in.(${groups.map((g) => g.id).join(",")})`,
         },
         (payload) => {
-          // Cast payload.new เพื่อเข้าถึง group_id และ user_id
           const newPost = payload.new as { group_id: string; user_id: string };
           const groupId = newPost.group_id;
           const group = groups.find((g) => g.id === groupId);
 
-          // 1. ถ้าโพสต์ถูกสร้างโดยผู้ใช้ปัจจุบัน ให้ข้าม (ไม่บวกแจ้งเตือน)
+          // ถ้าโพสต์ของตัวเอง หรือกำลังดูหน้ากลุ่มนั้นอยู่ -> ไม่ต้องแจ้งเตือน
           if (newPost.user_id === userId) return;
-
-          // 2. ถ้าไม่พบกลุ่ม หรือผู้ใช้อยู่ในหน้ากลุ่มนั้นอยู่แล้ว ให้ข้าม
           if (!group || pathname === `/groups/${groupId}`) return;
 
-          // 3. บวกจำนวนแจ้งเตือนเพิ่ม +1 ใน State
+          // เพิ่มตัวเลขแจ้งเตือน +1
           setUnreadCounts((prev) => ({
             ...prev,
             [groupId]: (prev[groupId] || 0) + 1,
           }));
         }
       )
-      .subscribe(); // เริ่มฟัง Channel
+      .subscribe();
 
     return () => {
-      // Cleanup Function: ลบ Channel เมื่อ Component ถูกทำลาย
-      supabase.removeChannel(channel);
+      supabase.removeChannel(channel); // ล้างการเชื่อมต่อเมื่อเลิกใช้
     };
-    // Re-run effect เมื่อรายชื่อกลุ่ม, Path, หรือ User ID เปลี่ยน
   }, [groups, pathname, userId]);
 
+  // --- 5. ส่วนแสดงผลหน้าจอ (Render UI) ---
   return (
-    // --- Container หลัก: แถบนำทางรอง (Fixed Position ใต้ Navbar หลัก) ---
+    // Navbar รอง: ติดตายตัว (Fixed) ใต้ Navbar หลัก
     <nav
       className={`
         fixed left-0 w-full z-40
@@ -191,14 +172,15 @@ export const NavbarSub = () => {
         border-b border-slate-200
         transition-all duration-300 ease-in-out
         ${isScrollingUp 
-          ? "top-20 opacity-100 translate-y-0" 
-          : "top-20 opacity-0 -translate-y-full pointer-events-none"
+          ? "top-20 opacity-100 translate-y-0" // เลื่อนขึ้น -> แสดง
+          : "top-20 opacity-0 -translate-y-full pointer-events-none" // เลื่อนลง -> ซ่อน
         }
       `}
     >
-      {/* ---------------- TOP BAR (ปุ่มนำทางหลัก) ---------------- */}
+      {/* 5.1 แถบเมนูด้านบน (Top Bar) */}
       <div className="flex items-center justify-between px-4 sm:px-6 py-3 h-16 gap-2">
-        {/* Left buttons (ปุ่ม 'กลุ่มทั้งหมด' และ 'กลุ่มของฉัน') */}
+        
+        {/* ปุ่มเมนูซ้าย */}
         <div className="flex items-center gap-2 shrink-0">
           <Link
             href="/groups"
@@ -225,7 +207,7 @@ export const NavbarSub = () => {
           </Link>
         </div>
 
-        {/* Toggle Button (ปุ่มแสดง/ซ่อนแถบกลุ่ม) */}
+        {/* ปุ่มเปิด/ปิดแถบกลุ่ม */}
         <div className="flex justify-center">
           <button
             onClick={() => setIsGroupsVisible(!isGroupsVisible)}
@@ -240,7 +222,7 @@ export const NavbarSub = () => {
           </button>
         </div>
 
-        {/* Create button (ปุ่ม 'สร้างกลุ่ม') */}
+        {/* ปุ่มสร้างกลุ่ม */}
         <div className="shrink-0">
           <Link
             href="/create"
@@ -257,7 +239,7 @@ export const NavbarSub = () => {
         </div>
       </div>
 
-      {/* --------------- GROUP BAR (แถบแสดงกลุ่มที่ติดตาม) ---------------- */}
+      {/* 5.2 แถบแสดงรายการกลุ่ม (Group Bar) */}
       <div
         className={`
           overflow-hidden transition-all duration-500 ease-in-out 
@@ -267,24 +249,23 @@ export const NavbarSub = () => {
       >
         <div className="flex gap-3 px-6 py-3 overflow-x-auto scrollbar-hide scroll-smooth">
           {groups.length === 0 ? (
-            // กรณีไม่มีกลุ่มที่ติดตาม: แสดงข้อความ
+            // ถ้าไม่มีกลุ่มที่ติดตาม
             <div className="text-xs sm:text-sm text-slate-500 w-full text-center py-2">
               ยังไม่มีกลุ่มที่คุณติดตาม
             </div>
           ) : (
-            // วนลูปแสดง Avatar/Link ของกลุ่มที่ติดตาม
+            // แสดงรายการกลุ่ม
             groups.map((group) => {
-              const count = unreadCounts[group.id] || 0; // ดึงจำนวนที่ยังไม่อ่าน
+              const count = unreadCounts[group.id] || 0; // จำนวนที่ยังไม่อ่าน
 
               return (
                 <div key={group.id} className="relative shrink-0">
                   <Link
                     href={`/groups/${group.id}`}
-                    // เมื่อคลิก: ทำเครื่องหมายว่าอ่านแล้ว และอัปเดตสถานะการอ่านใน DB
-                    onClick={() => markGroupAsRead(group.id)}
+                    onClick={() => markGroupAsRead(group.id)} // กดแล้วเคลียร์แจ้งเตือน
                     className="block"
                   >
-                    {/* Avatar Bubble Container */}
+                    {/* กรอบรูปโปรไฟล์กลุ่ม */}
                     <div
                       className="
                         w-11 h-11 rounded-full overflow-hidden 
@@ -295,7 +276,6 @@ export const NavbarSub = () => {
                       "
                     >
                       {group.avatar_url ? (
-                        // แสดงรูป Avatar กลุ่มจาก Storage
                         <Image
                           src={
                             supabase.storage
@@ -309,13 +289,12 @@ export const NavbarSub = () => {
                           unoptimized
                         />
                       ) : (
-                        // Placeholder Icon หากไม่มี Avatar
                         <UsersRound className="w-5 h-5 text-slate-600" />
                       )}
                     </div>
                   </Link>
 
-                  {/* Badge: แสดงจำนวนที่ยังไม่อ่าน (ถ้า count > 0) */}
+                  {/* ป้ายแจ้งเตือน (Badge) สีแดง */}
                   {count > 0 && (
                     <span
                       className="
@@ -325,7 +304,6 @@ export const NavbarSub = () => {
                         shadow-md
                       "
                     >
-                      {/* แสดง 99+ ถ้าจำนวนเกิน 99 */}
                       {count > 99 ? "99+" : count}
                     </span>
                   )}

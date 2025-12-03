@@ -1,88 +1,100 @@
-"use client";
+"use client"; // ระบุว่าไฟล์นี้ทำงานฝั่ง Client (Browser) เพราะมีการใช้ Hooks และการโต้ตอบกับผู้ใช้
 
 import React, {
-  useState,
-  useRef,
-  ChangeEvent,
-  KeyboardEvent,
-  useEffect,
+  useState,       // ใช้เก็บข้อมูลสถานะในหน้าเว็บ (เช่น รหัสที่กรอก, ข้อความแจ้งเตือน)
+  useRef,         // ใช้เข้าถึง Element ของ HTML โดยตรง (ใช้จัดการ Focus ช่องกรอกรหัส)
+  ChangeEvent,    // ชนิดข้อมูลสำหรับเหตุการณ์การพิมพ์
+  KeyboardEvent,  // ชนิดข้อมูลสำหรับเหตุการณ์การกดปุ่มคีย์บอร์ด
+  useEffect,      // ใช้ทำงานอัตโนมัติเมื่อหน้าเว็บโหลดเสร็จ
 } from "react";
-// นำเข้า Client สำหรับการสื่อสารกับ Supabase
-import { supabase } from "@/lib/supabase/client";
+import { supabase } from "@/lib/supabase/client"; // นำเข้าเครื่องมือเชื่อมต่อฐานข้อมูล Supabase
+
+// ====================================================================
+// หน้าจอยืนยันรหัส OTP (One-Time Password)
+// ====================================================================
 
 export default function VerifyOtpPage() {
-  // --- ส่วนจัดการ State (ข้อมูลที่ใช้ในหน้าเว็บ) ---
-  // State สำหรับเก็บค่า OTP 6 หลัก โดยเริ่มต้นเป็น Array ว่าง 6 ตัว
+  
+  // --- 1. ส่วนกำหนดตัวแปรและสถานะ (State) ---
+
+  // เก็บค่ารหัส OTP 6 หลัก เป็น Array (เริ่มด้วยค่าว่าง 6 ช่อง)
   const [otp, setOtp] = useState<string[]>(new Array(6).fill(""));
-  // State สำหรับเก็บอีเมลผู้ใช้ ซึ่งจะถูกดึงมาจาก URL
+  
+  // เก็บอีเมลของผู้ใช้ (จะดึงมาจาก URL)
   const [email, setEmail] = useState<string>("");
-  // State สำหรับเก็บข้อความแจ้งเตือน (Success/Error) ที่จะแสดงบนหน้าจอ
+  
+  // เก็บข้อความที่จะแสดงแจ้งเตือนผู้ใช้
   const [message, setMessage] = useState<string>("");
-  // State สถานะ Error: true ถ้ามีข้อผิดพลาด, false ถ้าเป็นข้อความปกติหรือ Success
+  
+  // เก็บสถานะว่าข้อความแจ้งเตือนเป็น Error หรือไม่ (true=แดง, false=เขียว)
   const [isError, setIsError] = useState<boolean>(false);
-  // State สถานะกำลังโหลด: true เมื่อมีการเรียก API (เช่น กด Submit หรือ Resend)
+  
+  // เก็บสถานะว่ากำลังโหลดอยู่หรือไม่ (เพื่อล็อคปุ่มกด)
   const [isLoading, setIsLoading] = useState<boolean>(false);
 
-  // ใช้ Ref Array เพื่ออ้างอิงและควบคุมการโฟกัสไปยัง Input แต่ละช่อง (0 ถึง 5)
+  // ตัวแปรอ้างอิงไปยังช่องกรอก Input ทั้ง 6 ช่อง (เพื่อสั่งให้ Focus ได้)
   const inputRefs = useRef<(HTMLInputElement | null)[]>([]);
 
-  // --- Effect: ทำงานเมื่อโหลดหน้าเว็บครั้งแรก ---
+  // --- 2. ส่วนทำงานอัตโนมัติเมื่อโหลดหน้า (Effect) ---
+  
   useEffect(() => {
-    // สร้าง Object เพื่อดึงค่าจาก Query Parameter ใน URL
+    // ดึงค่า Query Parameters จาก URL (ส่วนหลังเครื่องหมาย ?)
     const searchParams = new URLSearchParams(window.location.search);
-    // ดึงค่า "email"
-    const emailFromUrl = searchParams.get("email");
+    const emailFromUrl = searchParams.get("email"); // หาตัวแปรชื่อ 'email'
     
     if (emailFromUrl) {
-      // หากพบอีเมล ให้อัปเดต State email
+      // ถ้าเจออีเมล ให้บันทึกลง State
       setEmail(emailFromUrl);
     } else {
-      // หากไม่พบอีเมล ให้แสดงข้อความ Error
+      // ถ้าไม่เจอ ให้แจ้งเตือน Error
       setMessage("ไม่พบอีเมลใน URL กรุณาลองใหม่");
       setIsError(true);
     }
-  }, []); // [] หมายถึง Effect ทำงานเพียงครั้งเดียวเมื่อ Component ถูก Mount
+  }, []); // ทำงานแค่ครั้งเดียวตอนเปิดหน้านี้
 
-  // --- Logic: จัดการการพิมพ์ในช่อง OTP (handleChange) ---
+  // --- 3. ฟังก์ชันจัดการเหตุการณ์ (Event Handlers) ---
+
+  // ฟังก์ชันทำงานเมื่อผู้ใช้พิมพ์ในช่อง OTP
   const handleChange = (e: ChangeEvent<HTMLInputElement>, index: number) => {
     const value = e.target.value;
     
-    // Guard Clause: ยอมรับเฉพาะตัวเลข 0-9 และความยาวไม่เกิน 1 ตัวอักษร
+    // ตรวจสอบความถูกต้อง: ต้องเป็นตัวเลข 0-9 เท่านั้น และยาวไม่เกิน 1 ตัว
     if (value.length > 1 || (value && !/^[0-9]$/.test(value))) {
-      return;
+      return; // ถ้าไม่ถูกเงื่อนไข ให้หยุดทำงาน
     }
 
-    // อัปเดตค่าใน State: คัดลอก Array เดิมและแทนที่ค่าที่ตำแหน่งปัจจุบัน
+    // สร้างสำเนา Array OTP เดิม แล้วอัปเดตค่าใหม่ลงไป
     const newOtp = [...otp];
     newOtp[index] = value;
     setOtp(newOtp);
 
-    // Auto-Focus: ถ้าพิมพ์ค่าเสร็จและไม่ใช่ช่องสุดท้าย ให้ย้ายเคอร์เซอร์ไปช่องถัดไป
+    // ระบบเลื่อนช่องอัตโนมัติ: ถ้าพิมพ์ตัวเลขแล้ว และไม่ใช่ช่องสุดท้าย
     if (value && index < 5) {
+      // สั่งให้ย้าย Cursor ไปช่องถัดไป
       inputRefs.current[index + 1]?.focus();
     }
   };
 
-  // --- Logic: จัดการปุ่มกด (handleKeyDown) ---
+  // ฟังก์ชันทำงานเมื่อผู้ใช้กดปุ่มคีย์บอร์ด (สำหรับปุ่ม Backspace)
   const handleKeyDown = (e: KeyboardEvent<HTMLInputElement>, index: number) => {
-    // ตรวจสอบว่าเป็นการกดปุ่ม Backspace ในขณะที่ช่องปัจจุบันว่างเปล่าและไม่ใช่ช่องแรก
+    // ถ้ากด Backspace + ช่องปัจจุบันว่างเปล่า + ไม่ใช่ช่องแรกสุด
     if (e.key === "Backspace" && !otp[index] && index > 0) {
-      // ย้ายเคอร์เซอร์กลับไปช่องก่อนหน้า
+      // สั่งให้ย้าย Cursor ถอยกลับไปช่องก่อนหน้า
       inputRefs.current[index - 1]?.focus();
     }
   };
 
-  // --- Logic: ส่งข้อมูลยืนยัน OTP (handleSubmit) ---
+  // ฟังก์ชันส่งข้อมูลยืนยัน OTP (เมื่อกดปุ่ม Submit)
   const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault(); // ป้องกันการ Submit แบบดั้งเดิมของ Form
-    setIsLoading(true); // ตั้งสถานะเป็นกำลังโหลด
-    setMessage(""); // ล้างข้อความแจ้งเตือนเดิม
+    e.preventDefault(); // ห้ามไม่ให้หน้าเว็บ Refresh
+    setIsLoading(true); // เริ่มสถานะ Loading
+    setMessage("");     // ล้างข้อความเก่า
     setIsError(false);
 
-    // รวม OTP 6 ช่องให้เป็น String เดียว
+    // รวมตัวเลข 6 ช่องให้เป็นข้อความเดียว
     const fullOtp = otp.join("");
 
-    // ตรวจสอบความถูกต้องเบื้องต้น (ความยาวต้องเท่ากับ 6)
+    // ตรวจสอบเบื้องต้น
     if (fullOtp.length !== 6) {
       setMessage("กรุณากรอกรหัส 6 หลักให้ครบถ้วน");
       setIsError(true);
@@ -90,7 +102,6 @@ export default function VerifyOtpPage() {
       return;
     }
 
-    // ตรวจสอบว่ามี Supabase client และ Email หรือไม่
     if (!supabase || !email) {
       setMessage("เกิดข้อผิดพลาด: ไม่พบอีเมล หรือการตั้งค่า Supabase ไม่ถูกต้อง");
       setIsError(true);
@@ -99,38 +110,37 @@ export default function VerifyOtpPage() {
     }
 
     try {
-      // เรียกใช้ Supabase: ส่ง OTP เพื่อยืนยันอีเมล
+      // เรียกใช้ Supabase เพื่อยืนยันรหัส
       const { error: verifyError } = await supabase.auth.verifyOtp({
         email: email,
         token: fullOtp,
-        type: "email", // ระบุประเภทเป็นการยืนยันอีเมล
+        type: "email",
       });
 
       if (verifyError) {
-        throw verifyError;
+        throw verifyError; // ถ้า Supabase แจ้ง Error ให้กระโดดไปส่วน catch
       }
 
-      // ยืนยันสำเร็จ: แสดงข้อความ Success และหน่วงเวลาเปลี่ยนหน้า
-      setMessage("ยืนยันสำเร็จ! ไปหน้าตั้งรหัสผ่านใหม่");
+      // ถ้าสำเร็จ
+      setMessage("ยืนยันสำเร็จ! กำลังเปลี่ยนหน้าไปตั้งรหัสผ่านใหม่");
       setIsError(false);
 
+      // รอ 1.5 วินาที แล้วเปลี่ยนหน้าไปตั้งรหัสผ่านใหม่
       setTimeout(() => {
-        // เปลี่ยนเส้นทางไปยังหน้าตั้งรหัสผ่านใหม่
-        window.location.href = `/new_password`; 
+        window.location.href = `/newPassword`;
       }, 1500);
 
     } catch (err: unknown) {
       console.error("Verify OTP error:", err);
       let errorMessage = "เกิดข้อผิดพลาดที่ไม่คาดคิด";
       
-      // จัดการข้อความ Error จาก Supabase
+      // แปลงข้อความ Error ให้อ่านง่ายขึ้น
       if (err instanceof Error) {
         if (
           err.message.includes("Invalid OTP") ||
           err.message.includes("Invalid verification code") ||
           err.message.includes("expired")
         ) {
-          // ข้อความ Error สำหรับรหัสไม่ถูกต้องหรือหมดอายุ
           errorMessage = "รหัส OTP 6 หลักไม่ถูกต้องหรือหมดอายุ";
         } else {
           errorMessage = err.message;
@@ -139,18 +149,16 @@ export default function VerifyOtpPage() {
       setMessage(`เกิดข้อผิดพลาด: ${errorMessage}`);
       setIsError(true);
     } finally {
-      // ตั้งสถานะเป็นเสร็จสิ้นการโหลดเสมอ
-      setIsLoading(false);
+      setIsLoading(false); // จบการทำงาน ปลดล็อคปุ่ม
     }
   };
 
-  // --- Logic: ขอรหัส OTP ใหม่ (Resend) ---
+  // ฟังก์ชันขอรหัส OTP ใหม่ (Resend Code)
   const handleResendCode = async () => {
     setIsLoading(true);
     setMessage("");
     setIsError(false);
 
-    // ตรวจสอบว่ามี Supabase client และ Email หรือไม่
     if (!supabase || !email) {
       setMessage("ไม่พบอีเมล, ไม่สามารถส่งรหัสใหม่ได้");
       setIsError(true);
@@ -159,10 +167,10 @@ export default function VerifyOtpPage() {
     }
 
     try {
-      // ส่งคำขอ OTP ใหม่ไปที่อีเมล (สำหรับกรณีลืมรหัสผ่าน)
+      // สั่ง Supabase ให้ส่งรหัสใหม่ (เหมือนตอน Login)
       const { error } = await supabase.auth.signInWithOtp({
         email: email,
-        options: { shouldCreateUser: false }, // ตั้งค่าไม่ให้สร้าง User ใหม่หากยังไม่มี
+        options: { shouldCreateUser: false }, // ย้ำว่าไม่ต้องสร้าง user ใหม่
       });
 
       if (error) {
@@ -172,7 +180,7 @@ export default function VerifyOtpPage() {
       setMessage("ส่งรหัส OTP ใหม่สำเร็จแล้ว กรุณาตรวจสอบอีเมล");
       setIsError(false);
       
-      // รีเซ็ตช่องกรอกและโฟกัสช่องแรก
+      // ล้างช่องกรอกรหัสให้ว่าง แล้วโฟกัสช่องแรกใหม่
       setOtp(new Array(6).fill(""));
       inputRefs.current[0]?.focus();
 
@@ -189,18 +197,19 @@ export default function VerifyOtpPage() {
     }
   };
 
+  // --- 4. ส่วนแสดงผลหน้าจอ (Render UI) ---
   return (
-    // --- Container หลัก: พื้นหลัง Gradient และจัดกึ่งกลาง ---
+    // ฉากหลังแบบไล่สี (Gradient) เต็มหน้าจอ
     <div className="flex items-center justify-center min-h-screen p-4 sm:p-6 md:p-8 bg-gradient-to-br from-green-500 to-blue-800 relative overflow-hidden">
       
-      {/* Layer สีดำจางๆ เพื่อให้อ่านตัวหนังสือง่ายขึ้น */}
+      {/* เลเยอร์สีดำจางๆ เพื่อให้ตัวอักษรอ่านง่ายขึ้น */}
       <div className="absolute inset-0 bg-black opacity-50"></div>
 
-      {/* --- Card: กล่องแบบฟอร์มหลัก (อยู่เหนือ Layer พื้นหลัง) --- */}
+      {/* กล่อง Card ตรงกลาง */}
       <div className="w-full max-w-sm relative z-10 px-2 sm:px-0">
         <div className="p-6 sm:p-8 bg-white/60 backdrop-blur-lg rounded-2xl shadow-2xl border-2 border-white/30 transform transition duration-500 hover:shadow-blue-600/30">
           
-          {/* หัวข้อและคำอธิบาย */}
+          {/* หัวข้อหน้าจอ */}
           <div className="text-center mb-6 sm:mb-8 space-y-2">
             <h1 className="text-2xl sm:text-3xl md:text-4xl font-extrabold text-gray-900 tracking-tight leading-tight">
               ยืนยันตัวตน
@@ -208,26 +217,26 @@ export default function VerifyOtpPage() {
             <p className="text-xs sm:text-sm text-gray-600 font-medium px-2 leading-relaxed">
               กรุณากรอกรหัส 6 หลักที่เราส่งไปให้ที่อีเมล
             </p>
-            {/* แสดงอีเมลที่กำลังดำเนินการ */}
+            {/* แสดงอีเมลที่กำลังยืนยัน */}
             <p className="text-xs sm:text-sm text-gray-800 font-bold px-2">
               {email}
             </p>
           </div>
 
-          {/* ส่วนแสดงข้อความแจ้งเตือน (Message Box) */}
+          {/* กล่องแสดงข้อความแจ้งเตือน (Success / Error) */}
           {message && (
             <div
               className={`p-3 mb-4 rounded-lg text-xs sm:text-sm font-semibold break-words ${
                 isError
-                  ? "bg-red-100 text-red-700 border border-red-300" // Style สำหรับ Error
-                  : "bg-green-100 text-green-700 border border-green-300" // Style สำหรับ Success
+                  ? "bg-red-100 text-red-700 border border-red-300"   // สีแดงถ้า Error
+                  : "bg-green-100 text-green-700 border border-green-300" // สีเขียวถ้าสำเร็จ
               }`}
             >
               {message}
             </div>
           )}
 
-          {/* แจ้งเตือนสำหรับนักพัฒนาหาก Supabase Config ไม่ถูกต้อง */}
+          {/* กล่องเตือน Developer ถ้าลืมใส่ค่า Config ของ Supabase */}
           {!supabase && !message && (
             <div className="p-3 mb-4 rounded-lg text-xs sm:text-sm font-semibold bg-yellow-100 text-yellow-800 border border-yellow-300">
               <strong>คำเตือน:</strong> กรุณาตั้งค่า{" "}
@@ -236,20 +245,19 @@ export default function VerifyOtpPage() {
             </div>
           )}
 
-          {/* แบบฟอร์มกรอก OTP */}
+          {/* แบบฟอร์มกรอกรหัส */}
           <form onSubmit={handleSubmit} className="space-y-5">
             
-            {/* ช่องกรอกรหัส 6 ช่อง (Input Grid) */}
+            {/* ชุดช่องกรอกรหัส 6 ช่อง */}
             <div className="flex justify-center gap-1.5 sm:gap-2 mb-6">
               {otp.map((digit, index) => (
                 <input
                   key={index}
                   type="text"
-                  maxLength={1} // จำกัดให้กรอกได้ 1 ตัวอักษร
+                  maxLength={1}
                   value={digit}
                   onChange={(e) => handleChange(e, index)}
                   onKeyDown={(e) => handleKeyDown(e, index)}
-                  // กำหนด Ref เพื่อควบคุมการโฟกัส
                   ref={(el) => {
                     inputRefs.current[index] = el;
                   }}
@@ -262,24 +270,23 @@ export default function VerifyOtpPage() {
               ))}
             </div>
 
-            {/* ปุ่มยืนยัน (Submit Button) */}
+            {/* ปุ่มกดยืนยัน */}
             <button
               type="submit"
-              // กำหนดให้ปุ่ม Disabled หากกำลังโหลด, ไม่มีอีเมล, ไม่มี Supabase, หรือกรอก OTP ไม่ครบ 6 หลัก
               disabled={
                 isLoading || !email || !supabase || otp.join("").length < 6
               }
               className={`w-full py-3 sm:py-3.5 rounded-xl font-bold shadow-lg transition-all duration-300 ease-in-out text-base sm:text-lg ${
                 isLoading || !email || !supabase || otp.join("").length < 6
-                  ? "bg-blue-300 text-white cursor-not-allowed opacity-50" // Style เมื่อ Disabled
-                  : "bg-gradient-to-r from-blue-600 to-blue-700 text-white shadow-blue-600/40 hover:shadow-blue-600/60 hover:from-blue-700 hover:to-blue-800 transform hover:scale-[1.02] cursor-pointer active:scale-95 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2" // Style เมื่อ Active
+                  ? "bg-blue-300 text-white cursor-not-allowed opacity-50" // สีจางเมื่อกดไม่ได้
+                  : "bg-gradient-to-r from-blue-600 to-blue-700 text-white shadow-blue-600/40 hover:shadow-blue-600/60 hover:from-blue-700 hover:to-blue-800 transform hover:scale-[1.02] cursor-pointer active:scale-95 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2" // สีปกติ
               }`}
             >
               {isLoading ? "กำลังตรวจสอบ..." : "ยืนยันรหัส OTP"}
             </button>
           </form>
 
-          {/* ลิงก์กดส่งรหัสใหม่ (Resend Code) */}
+          {/* ลิงก์กดขอรหัสใหม่ */}
           <div className="text-center mt-5 sm:mt-6">
             <button
               onClick={handleResendCode}
@@ -293,7 +300,7 @@ export default function VerifyOtpPage() {
         </div>
       </div>
 
-      {/* --- ส่วนพื้นหลัง Animation (Wave Background) --- */}
+      {/* ส่วนตกแต่งพื้นหลัง (Animation คลื่น) */}
       <div className="wave-container">
         <div className="wave-blob wave-1"></div>
         <div className="wave-blob wave-2"></div>
@@ -303,7 +310,6 @@ export default function VerifyOtpPage() {
         <div className="wave-blob wave-small-3"></div>
         <div className="wave-blob wave-small-4"></div>
       </div>
-      
     </div>
   );
 }

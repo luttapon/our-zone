@@ -1,9 +1,13 @@
-"use client";
+"use client"; // แจ้ง Next.js ว่าไฟล์นี้ทำงานที่ฝั่ง Browser (Client Side)
 
 import { createContext, useContext, useState, useEffect, ReactNode } from "react";
-import { supabase } from "@/lib/supabase/client";
+import { supabase } from "@/lib/supabase/client"; // เครื่องมือเชื่อมต่อฐานข้อมูล Supabase
 
-// --- กำหนดโครงสร้างข้อมูลกลุ่มแบบย่อ (Type Definition) ---
+// ====================================================================
+// ส่วนกำหนดรูปแบบข้อมูล (Types)
+// ====================================================================
+
+// โครงสร้างข้อมูลกลุ่มแบบย่อ (เอาไว้แสดงในรายการ)
 export type GroupMinimal = {
   id: string;
   name: string;
@@ -11,49 +15,53 @@ export type GroupMinimal = {
   owner_id: string;
 };
 
-// --- กำหนดรูปแบบของ Context ---
+// รูปแบบของ Context (ข้อมูลที่จะส่งให้คนอื่นใช้)
 type FollowedGroupsContextType = {
-  groups: GroupMinimal[];
-  refreshGroups: () => void; // ฟังก์ชันสำหรับรีโหลดข้อมูลกลุ่ม
+  groups: GroupMinimal[]; // รายชื่อกลุ่มทั้งหมด
+  refreshGroups: () => void; // ฟังก์ชันสำหรับสั่งโหลดข้อมูลใหม่
 };
 
-// สร้าง Context พร้อมค่าเริ่มต้น
+// สร้าง Context ขึ้นมา (ค่าเริ่มต้นเป็นว่างๆ)
 const FollowedGroupsContext = createContext<FollowedGroupsContextType>({
   groups: [],
   refreshGroups: () => {},
 });
 
-// --- Provider: ตัวให้บริการข้อมูลแก่ Component ลูก ---
+// ====================================================================
+// Component หลัก: Provider (ตัวกระจายข้อมูล)
+// ====================================================================
+
 export const FollowedGroupsProvider = ({ children }: { children: ReactNode }) => {
+  // เก็บรายการกลุ่มทั้งหมดไว้ใน State
   const [groups, setGroups] = useState<GroupMinimal[]>([]);
 
-  // --- ฟังก์ชันหลัก: ดึงข้อมูลกลุ่มทั้งหมด (ที่สร้างเอง + ที่กดติดตาม) ---
+  // --- ฟังก์ชันดึงข้อมูลกลุ่มทั้งหมด (ที่สร้างเอง + ที่ติดตาม) ---
   const fetchGroups = async () => {
-    // 1. ตรวจสอบข้อมูลผู้ใช้ปัจจุบัน
+    // 1. ตรวจสอบก่อนว่าใครล็อกอินอยู่
     const {
       data: { user },
     } = await supabase.auth.getUser();
-    if (!user) return;
+    if (!user) return; // ถ้าไม่ได้ล็อกอิน ก็จบการทำงาน
 
-    // 2. ดึงข้อมูลกลุ่มที่เราเป็น "เจ้าของ" (Created Groups)
+    // 2. ดึงกลุ่มที่ "ฉันเป็นเจ้าของ" (Owned Groups)
     const { data: ownedGroups } = await supabase
       .from("groups")
       .select("id,name,avatar_url,owner_id")
       .eq("owner_id", user.id);
 
-    // 3. ดึงข้อมูลกลุ่มที่เราเป็น "สมาชิก" (Followed Groups)
-    // ใช้ Join Table: group_members -> groups
+    // 3. ดึงกลุ่มที่ "ฉันเป็นสมาชิก/ติดตาม" (Followed Groups)
+    // ต้อง Join จากตาราง group_members ไปหาตาราง groups
     const { data: followedGroups } = await supabase
       .from("group_members")
       .select("groups(id,name,avatar_url,owner_id)")
       .eq("user_id", user.id);
 
-    // Type ชั่วคราวสำหรับการแปลงข้อมูลจาก Join Table
+    // กำหนด Type ชั่วคราวเพื่อช่วยในการแปลงข้อมูล
     type FollowedGroupRow = {
       groups?: GroupMinimal[] | null;
     };
 
-    // 4. แปลงโครงสร้างข้อมูล (Flatten Data) ให้เป็น Array ชั้นเดียว
+    // 4. แปลงข้อมูลกลุ่มที่ติดตามให้อยู่ในรูปแบบ Array ปกติ (Flatten)
     const followedGroupsData: GroupMinimal[] = (followedGroups ?? [])
       .flatMap((f: FollowedGroupRow) => f.groups ?? [])
       .map(g => ({
@@ -63,30 +71,31 @@ export const FollowedGroupsProvider = ({ children }: { children: ReactNode }) =>
         owner_id: g.owner_id,
       }));
 
-    // 5. รวมกลุ่มทั้งสองประเภทเข้าด้วยกัน และกรองกลุ่มที่ซ้ำกันออก (Deduplicate)
-    // (กลุ่มที่เป็นเจ้าของก็อาจเป็นสมาชิกด้วย แต่จะถูกนับเป็น Owned Group)
+    // 5. รวมกลุ่มทั้ง 2 ประเภทเข้าด้วยกัน และตัดตัวซ้ำออก
+    // (กันพลาดกรณีที่เป็นทั้งเจ้าของและสมาชิกในเวลาเดียวกัน)
     const combinedGroups: GroupMinimal[] = [
       ...(ownedGroups ?? []),
       ...followedGroupsData,
     ].filter(
       (value, index, self) => 
-        // เก็บเฉพาะ Index แรกที่พบ Group ID นั้นๆ
+        // เช็คว่า ID นี้ปรากฏเป็นครั้งแรกหรือไม่ (ถ้าเจอซ้ำจะถูกกรองออก)
         index === self.findIndex(g => g.id === value.id)
     );
 
-    // อัปเดตข้อมูลลง State
+    // บันทึกลง State เพื่อให้ Component อื่นนำไปใช้
     setGroups(combinedGroups);
   };
 
-  // --- Effect: โหลดข้อมูลทันทีเมื่อ Component ถูกเรียกใช้ ---
+  // --- ทำงานทันทีเมื่อเริ่มโหลด (Effect) ---
   useEffect(() => {
     const loadGroups = async () => {
       await fetchGroups();
     };
 
     loadGroups();
-  }, []); // [] หมายถึงโหลดครั้งเดียวเมื่อ Mount
+  }, []); // [] หมายถึงทำแค่ครั้งเดียวตอนเปิดเว็บ
 
+  // ส่งข้อมูล (groups) และฟังก์ชัน (refreshGroups) ไปให้ลูกหลานใช้งาน
   return (
     <FollowedGroupsContext.Provider value={{ groups, refreshGroups: fetchGroups }}>
       {children}
@@ -94,5 +103,7 @@ export const FollowedGroupsProvider = ({ children }: { children: ReactNode }) =>
   );
 };
 
-// --- Hook สำหรับให้ Component อื่นเรียกใช้ข้อมูลได้ง่ายๆ ---
+// ====================================================================
+// Custom Hook: สำหรับเรียกใช้ข้อมูลนี้จากที่อื่นได้ง่ายๆ
+// ====================================================================
 export const useFollowedGroups = () => useContext(FollowedGroupsContext);

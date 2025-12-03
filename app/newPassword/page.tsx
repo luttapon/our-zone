@@ -1,19 +1,26 @@
-"use client";
+"use client"; // แจ้ง Next.js ว่าไฟล์นี้ทำงานที่ฝั่ง Browser (Client Side)
 
 import React, { useState, useEffect } from "react";
-// นำเข้า Icon สำหรับการซ่อน/แสดงรหัสผ่าน
-import { Eye, EyeOff } from "lucide-react";
-// ใช้ Supabase client จริงที่นำเข้าจาก lib
-import { supabase } from "@/lib/supabase/client"; 
+import { Eye, EyeOff } from "lucide-react"; // ไอคอนรูปตา สำหรับเปิด/ปิดดูรหัสผ่าน
+import { supabase } from "@/lib/supabase/client"; // เครื่องมือเชื่อมต่อฐานข้อมูล Supabase
 
-// --- PasswordInput Component - ช่องกรอกรหัสผ่านพร้อมปุ่มสลับการมองเห็น ---
+// ====================================================================
+// ส่วนกำหนดรูปแบบข้อมูล (Interface)
+// ====================================================================
+
+// กำหนดว่าช่องกรอกรหัสผ่านต้องรับค่าอะไรบ้าง
 interface PasswordInputProps {
-  label?: string;
-  id: string;
-  value: string;
-  onChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
-  autoComplete?: string;
+  label?: string; // ป้ายกำกับ (มีหรือไม่มีก็ได้)
+  id: string;     // รหัสอ้างอิงของช่อง
+  value: string;  // ค่ารหัสผ่านที่กรอก
+  onChange: (e: React.ChangeEvent<HTMLInputElement>) => void; // ฟังก์ชันเมื่อมีการพิมพ์
+  autoComplete?: string; // การช่วยจำรหัสผ่านของ Browser
 }
+
+// ====================================================================
+// Component ย่อย: ช่องกรอกรหัสผ่าน (PasswordInput)
+// ====================================================================
+// เป็นช่องกรอกที่สามารถกดปุ่มรูปตาเพื่อดูรหัสผ่านได้
 
 const PasswordInput: React.FC<PasswordInputProps> = ({
   label,
@@ -22,23 +29,26 @@ const PasswordInput: React.FC<PasswordInputProps> = ({
   onChange,
   autoComplete = "off",
 }) => {
-  // State จัดการการมองเห็นรหัสผ่าน
+  // เก็บสถานะว่าเปิดดูรหัสผ่านอยู่หรือไม่ (false = ปิด, true = เปิด)
   const [isPasswordVisible, setIsPasswordVisible] = useState(false);
-  // กำหนด type ของ Input ตามสถานะการมองเห็น (text หรือ password)
+
+  // ถ้าเปิดดูอยู่ให้เป็น type="text" (เห็นตัวอักษร), ถ้าปิดให้เป็น "password" (เห็นจุดๆ)
   const inputType = isPasswordVisible ? "text" : "password";
-  // เลือก Icon ตามสถานะการมองเห็น
+
+  // เลือกไอคอน: ถ้าเปิดอยู่ใช้ EyeOff (ตาปิด), ถ้าปิดอยู่ใช้ Eye (ตาเปิด)
   const VisibilityIcon = isPasswordVisible ? EyeOff : Eye;
 
   return (
     <div>
-      {/* Label สำหรับช่องกรอกข้อมูล */}
+      {/* แสดงป้ายกำกับถ้ามีส่งมา */}
       {label && (
         <label htmlFor={id} className="block text-sm font-medium text-gray-700">
           {label}
         </label>
       )}
+      
       <div className="relative">
-        {/* ช่อง input หลัก */}
+        {/* ช่องกรอกข้อมูลหลัก */}
         <input
           type={inputType}
           id={id}
@@ -46,9 +56,11 @@ const PasswordInput: React.FC<PasswordInputProps> = ({
           onChange={onChange}
           autoComplete={autoComplete}
           placeholder="••••••••"
+          // ตกแต่ง: ขอบมน, เงา, เปลี่ยนสีเมื่อโฟกัส
           className="w-full pl-3 pr-10 sm:pr-12 py-2.5 sm:py-3 border-2 border-gray-300 bg-white rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition duration-200 ease-in-out placeholder-gray-400 text-sm sm:text-base shadow-sm hover:border-gray-400"
         />
-        {/* ปุ่มสลับการมองเห็นรหัสผ่าน */}
+        
+        {/* ปุ่มกดสลับการมองเห็น (รูปตาด้านขวา) */}
         <button
           type="button"
           onClick={() => setIsPasswordVisible(!isPasswordVisible)}
@@ -62,54 +74,63 @@ const PasswordInput: React.FC<PasswordInputProps> = ({
   );
 };
 
-// --- ChangePasswordPage Component (หน้าหลัก) ---
+// ====================================================================
+// Component หลัก: หน้าเปลี่ยนรหัสผ่าน (ChangePasswordPage)
+// ====================================================================
+
 export default function ChangePasswordPage() {
-  // State สำหรับเก็บรหัสผ่านใหม่และการยืนยัน
+  // --- 1. การจัดการข้อมูล (State) ---
+  
+  // เก็บค่ารหัสผ่านใหม่ทั้ง 2 ช่อง
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
 
-  // State สำหรับ UI และสถานะการทำงาน
-  const [message, setMessage] = useState("");
-  const [isError, setIsError] = useState(false);
-  const [isLoading, setIsLoading] = useState(false);
-  // State ตรวจสอบสิทธิ์: ถ้ามี session (มาจากการรีเซ็ต) จะเป็น true
+  // เก็บสถานะการทำงานต่างๆ
+  const [message, setMessage] = useState("");     // ข้อความแจ้งเตือน
+  const [isError, setIsError] = useState(false);  // เป็น Error หรือไม่
+  const [isLoading, setIsLoading] = useState(false); // กำลังโหลดหรือไม่
+  
+  // เก็บสถานะสิทธิ์: ผู้ใช้ล็อกอินหรือยัง (ถ้ามาจากการรีเซ็ตต้องมี Session)
   const [isAuthorized, setIsAuthorized] = useState(false);
 
-  // --- Effect: ตรวจสอบสิทธิ์เมื่อโหลดหน้าเว็บ ---
+  // --- 2. ทำงานอัตโนมัติเมื่อเปิดหน้า (useEffect) ---
+  
   useEffect(() => {
     const checkSession = async () => {
-      // ดึง Session จาก Supabase (สำหรับลิงก์รีเซ็ตรหัสผ่าน)
+      // ตรวจสอบกับ Supabase ว่าผู้ใช้นี้มี Session ที่ถูกต้องหรือไม่
       const { data: { session }, error } = await supabase.auth.getSession();
 
       if (error) {
-        // กรณี Supabase Error
+        // ถ้า Supabase แจ้ง Error
         setMessage(`เกิดข้อผิดพลาดในการตรวจสอบสิทธิ์: ${error.message}`);
         setIsError(true);
       } else if (!session) {
-        // กรณีไม่มี Session (ไม่ได้รับอนุญาตให้เข้าถึง)
+        // ถ้าไม่มี Session (ไม่ได้ล็อกอิน หรือลิงก์หมดอายุ)
         setMessage("คุณไม่ได้รับอนุญาตให้เข้าหน้านี้ กรุณาเริ่มต้นใหม่");
         setIsError(true);
-        // สามารถเพิ่มโค้ด Redirect ไปหน้า Login/Reset ได้จริงตรงนี้
+        // (ส่วนนี้เตรียมไว้สำหรับสั่งเปลี่ยนหน้ากลับไป Login)
         setTimeout(() => console.log("Redirecting to password reset page..."), 3000); 
       } else {
-        // กรณีมี Session (อนุญาตให้ตั้งรหัสผ่านใหม่ได้)
+        // ถ้าทุกอย่างถูกต้อง: อนุญาตให้แสดงฟอร์มเปลี่ยนรหัส
         setIsAuthorized(true);
         setMessage("คุณยืนยันตัวตนสำเร็จแล้ว กรุณาตั้งรหัสผ่านใหม่");
         setIsError(false);
       }
     };
-    // เรียกใช้ฟังก์ชันตรวจสอบ Session ทันที
+    
+    // เรียกฟังก์ชันตรวจสอบทันทีที่หน้าเว็บโหลด
     checkSession();
-  }, []); // ทำงานเพียงครั้งเดียวเมื่อ Component ถูก Mount
+  }, []); // [] หมายถึงทำแค่ครั้งเดียวตอนเริ่ม
 
-  // --- Logic: การทำงานเมื่อกดบันทึกรหัสผ่านใหม่ (handleSubmit) ---
+  // --- 3. ฟังก์ชันทำงานเมื่อกดปุ่มบันทึก (Handler) ---
+
   const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setIsLoading(true);
-    setMessage("");
+    e.preventDefault(); // ห้ามรีเฟรชหน้า
+    setIsLoading(true); // เริ่มโหลด
+    setMessage("");     // ล้างข้อความเก่า
     setIsError(false);
 
-    // 1. ตรวจสอบข้อมูลไม่ว่าง
+    // ตรวจสอบ 1: กรอกครบไหม
     if (!newPassword || !confirmPassword) {
       setMessage("กรุณากรอกรหัสผ่านใหม่ และยืนยันรหัสผ่าน");
       setIsError(true);
@@ -117,7 +138,7 @@ export default function ChangePasswordPage() {
       return;
     }
 
-    // 2. ตรวจสอบความยาวรหัสผ่าน (อย่างน้อย 6 ตัวอักษร)
+    // ตรวจสอบ 2: ความยาวรหัสผ่าน
     if (newPassword.length < 6) {
       setMessage("รหัสผ่านใหม่ต้องมีความยาวอย่างน้อย 6 ตัวอักษร");
       setIsError(true);
@@ -125,7 +146,7 @@ export default function ChangePasswordPage() {
       return;
     }
 
-    // 3. ตรวจสอบรหัสผ่านตรงกัน
+    // ตรวจสอบ 3: รหัสผ่านตรงกันไหม
     if (newPassword !== confirmPassword) {
       setMessage("รหัสผ่านใหม่ทั้งสองช่องไม่ตรงกัน");
       setIsError(true);
@@ -134,42 +155,51 @@ export default function ChangePasswordPage() {
     }
 
     try {
-      // 4. เรียกใช้ Supabase: อัปเดตรหัสผ่านของผู้ใช้ปัจจุบัน
+      // สั่ง Supabase ให้อัปเดตรหัสผ่านของผู้ใช้นี้
       const { error: updateError } = await supabase.auth.updateUser({ password: newPassword });
-      if (updateError) throw updateError; // ส่ง Error ไปยัง catch block
+      
+      if (updateError) throw updateError; // ถ้ามีปัญหา ให้กระโดดไปส่วน catch
 
-      // 5. อัปเดตสำเร็จ
+      // ถ้าสำเร็จ
       setMessage("✅ อัปเดตรหัสผ่านสำเร็จ! กำลังนำคุณกลับไปหน้าหลัก...");
       setIsError(false);
       setIsLoading(false);
-      // ล้างค่าในฟอร์ม
+      
+      // ล้างช่องกรอก
       setNewPassword("");
       setConfirmPassword("");
 
-      // จำลองการ Redirect
+      // (ส่วนนี้เตรียมไว้สำหรับเปลี่ยนหน้าไป Home)
       setTimeout(() => console.log("Redirecting to home page..."), 2500); 
+
     } catch (err: unknown) {
-      // 6. จัดการ Error
+      // ถ้าเกิดข้อผิดพลาด
       console.error("Update password error:", err);
       let errorMessage = "เกิดข้อผิดพลาดที่ไม่คาดคิด";
+      
       if (err instanceof Error) errorMessage = err.message;
+      
       setMessage(`เกิดข้อผิดพลาด: ${errorMessage}`);
       setIsError(true);
       setIsLoading(false);
     }
   };
 
+  // --- 4. ส่วนแสดงผลหน้าจอ (Render UI) ---
   return (
-    // --- Container หลัก: พื้นหลัง Gradient และจัดกึ่งกลาง ---
+    // พื้นหลังไล่สีและจัดกึ่งกลาง
     <div className="flex items-center justify-center min-h-screen p-4 sm:p-6 md:p-8 bg-gradient-to-br from-yellow-200 to-green-600 relative overflow-hidden">
-      {/* Overlay สีดำจางๆ ช่วยให้อ่านง่ายขึ้น */}
+      
+      {/* เลเยอร์สีดำจางๆ เพื่อให้อ่านง่ายขึ้น */}
       <div className="absolute inset-0 bg-black opacity-50"></div>
       
-      {/* --- Card: กล่องแบบฟอร์มหลัก --- */}
+      {/* กล่อง Card หลัก */}
       <div className="w-full max-w-md relative z-10 px-2 sm:px-0">
+        
+        {/* กล่องเนื้อหา (พื้นหลังเบลอ) */}
         <div className="bg-white/50 backdrop-blur-lg p-6 sm:p-8 md:p-10 shadow-2xl rounded-2xl border-2 border-white/30 transform transition duration-500 hover:shadow-indigo-600/30">
           
-          {/* หัวข้อและคำอธิบาย */}
+          {/* หัวข้อหน้าจอ */}
           <div className="text-center mb-6 sm:mb-8 space-y-2">
             <h1 className="text-2xl sm:text-3xl md:text-4xl font-extrabold text-gray-900 tracking-tight leading-tight">
               ตั้งรหัสผ่านใหม่
@@ -179,24 +209,24 @@ export default function ChangePasswordPage() {
             </p>
           </div>
 
-          {/* ส่วนแสดงข้อความแจ้งเตือน (Success / Error) */}
+          {/* กล่องแจ้งเตือน (Success / Error) */}
           {message && (
             <div
               className={`p-3 mb-4 rounded-lg text-xs sm:text-sm font-semibold ${
                 isError
-                  ? "bg-red-100 text-red-700 border border-red-300" // Style เมื่อเกิด Error
-                  : "bg-green-100 text-green-700 border border-green-300" // Style เมื่อ Success
+                  ? "bg-red-100 text-red-700 border border-red-300" // สีแดงถ้า Error
+                  : "bg-green-100 text-green-700 border border-green-300" // สีเขียวถ้าสำเร็จ
               }`}
             >
               {message}
             </div>
           )}
 
-          {/* ฟอร์มตั้งรหัสผ่านใหม่ (แสดงเมื่อ isAuthorized เป็น true เท่านั้น) */}
+          {/* แสดงฟอร์มเฉพาะเมื่อตรวจสอบสิทธิ์ผ่านแล้ว (isAuthorized = true) */}
           {isAuthorized && (
             <form onSubmit={handleSubmit} className="space-y-4">
               
-              {/* ช่องกรอกรหัสผ่านใหม่ */}
+              {/* ช่องรหัสผ่านใหม่ */}
               <div>
                 <label htmlFor="newPassword" className="block text-xs sm:text-sm font-semibold text-gray-800 mb-2">
                   รหัสผ่านใหม่
@@ -223,14 +253,14 @@ export default function ChangePasswordPage() {
                 />
               </div>
 
-              {/* ปุ่มบันทึกรหัสผ่านใหม่ */}
+              {/* ปุ่มบันทึก */}
               <button
                 type="submit"
                 disabled={isLoading}
                 className={`w-full py-3 sm:py-3.5 rounded-xl font-bold shadow-lg transition-all duration-300 ease-in-out text-base sm:text-lg mt-6 ${
                   isLoading
-                    ? "bg-indigo-300 text-white cursor-not-allowed opacity-50" // Style เมื่อ Disabled
-                    : "bg-gradient-to-r from-indigo-600 to-indigo-700 text-white shadow-indigo-600/40 hover:shadow-indigo-600/60 hover:from-indigo-700 hover:to-indigo-800 transform hover:scale-[1.02] cursor-pointer active:scale-95 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2" // Style เมื่อ Active
+                    ? "bg-indigo-300 text-white cursor-not-allowed opacity-50" // สีจาง (กดไม่ได้)
+                    : "bg-gradient-to-r from-indigo-600 to-indigo-700 text-white shadow-indigo-600/40 hover:shadow-indigo-600/60 hover:from-indigo-700 hover:to-indigo-800 transform hover:scale-[1.02] cursor-pointer active:scale-95 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2" // สีปกติ
                 }`}
               >
                 {isLoading ? "กำลังบันทึก..." : "บันทึกรหัสผ่านใหม่"}
@@ -240,7 +270,7 @@ export default function ChangePasswordPage() {
         </div>
       </div>
 
-      {/* --- ส่วนพื้นหลัง Animation (Wave Background) --- */}
+      {/* Animation พื้นหลัง (คลื่น) */}
       <div className="wave-container">
         <div className="wave-blob wave-1"></div>
         <div className="wave-blob wave-2"></div>

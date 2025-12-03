@@ -1,30 +1,34 @@
-"use client";
+"use client"; // แจ้ง Next.js ว่าไฟล์นี้ทำงานที่ฝั่ง Browser (Client Side)
 
 import { useEffect, useState, useCallback } from "react";
-import { useParams, useRouter } from "next/navigation";
-import { supabase } from "@/lib/supabase/client";
+import { useParams, useRouter } from "next/navigation"; // เครื่องมือจัดการ URL และการนำทาง
+import { supabase } from "@/lib/supabase/client"; // เครื่องมือเชื่อมต่อฐานข้อมูล Supabase
 import Image from "next/image";
-import { UsersRound } from "lucide-react";
+import { UsersRound } from "lucide-react"; // ไอคอนต่างๆ
 
+// Context และ Components ย่อย
 import { useFollowedGroups } from "@/lib/context/FollowedGroupsContext";
 import GroupCalendar from "@/app/components/GroupCalendar";
 import PostFeed from "@/app/components/PostFeed";
 import PostInputBar from "@/app/components/PostInputBar";
 
+// นำเข้า Types
 import type {
   PostWithUser as SupabasePostWithUser,
   CommentWithUser,
 } from "@/types/supabase";
 
-// ----------------------------------------------------------------------
-// --- Constants & Placeholders ---
-// ----------------------------------------------------------------------
+// ====================================================================
+// ค่าคงที่และรูปภาพ Placeholder
+// ====================================================================
 const DEFAULT_COVER = "https://placehold.co/1200x400/e2e8f0/94a3b8?text=No+Cover";
 const DEFAULT_AVATAR = "https://placehold.co/128x128?text=G";
 
-// ----------------------------------------------------------------------
-// --- Types (ที่เกี่ยวข้อง) ---
-// ----------------------------------------------------------------------
+// ====================================================================
+// ส่วนกำหนดรูปแบบข้อมูล (Interfaces)
+// ====================================================================
+
+// ข้อมูลพื้นฐานของกลุ่ม
 interface GroupMinimal {
   id: string;
   name: string;
@@ -32,10 +36,10 @@ interface GroupMinimal {
   avatar_url?: string | null;
   cover_url?: string | null;
   owner_id: string;
-  allow_members_to_post?: boolean; // สิทธิ์ในการโพสต์
+  allow_members_to_post?: boolean; // สิทธิ์ในการโพสต์ของสมาชิก
 }
 
-// Type สำหรับ Post ที่ถูกดึงจาก DB ก่อนการจัดรูปแบบ
+// ข้อมูลโพสต์ดิบจาก Database (ก่อนแปลง)
 interface PostFromDB {
   id: string;
   group_id: string;
@@ -55,47 +59,48 @@ interface PostFromDB {
   likes?: { user_id: string }[] | null;
 }
 
-// Type สำหรับ Post ที่ถูกจัดรูปแบบแล้วพร้อมส่งเข้า PostFeed
+// ข้อมูลโพสต์สำหรับส่งให้ Feed Component (แปลงแล้ว)
 type FeedPost = Omit<SupabasePostWithUser, "media_urls"> & { media_urls: string[] };
 
-// ----------------------------------------------------------------------
-// --- Component หลัก: GroupDetailPage ---
-// ----------------------------------------------------------------------
+// ====================================================================
+// Component หลัก: หน้ารายละเอียดกลุ่ม (GroupDetailPage)
+// ====================================================================
+
 export default function GroupDetailPage() {
-  const { groupId } = useParams() as { groupId: string };
+  const { groupId } = useParams() as { groupId: string }; // ดึง ID กลุ่มจาก URL
   const router = useRouter();
-  const { refreshGroups } = useFollowedGroups(); // Context สำหรับอัปเดตกลุ่มที่ติดตาม
+  const { refreshGroups } = useFollowedGroups(); // ใช้เพื่ออัปเดต Sidebar เมื่อกดติดตาม
 
-  // --- State: Group Info & Status ---
-  const [group, setGroup] = useState<GroupMinimal | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [userId, setUserId] = useState<string | null>(null);
-  const [isFollowing, setIsFollowing] = useState(false);
-  const [followersCount, setFollowersCount] = useState(0);
+  // --- 1. การจัดการข้อมูลกลุ่มและผู้ใช้ (State) ---
+  const [group, setGroup] = useState<GroupMinimal | null>(null); // ข้อมูลกลุ่ม
+  const [loading, setLoading] = useState(true);                  // สถานะโหลดหน้าเว็บ
+  const [userId, setUserId] = useState<string | null>(null);     // ID ผู้ใช้ปัจจุบัน
+  const [isFollowing, setIsFollowing] = useState(false);         // สถานะการติดตาม
+  const [followersCount, setFollowersCount] = useState(0);       // จำนวนผู้ติดตาม
 
-  // --- State: Media URLs ---
-  const [coverUrl, setCoverUrl] = useState(DEFAULT_COVER);
-  const [avatarUrl, setAvatarUrl] = useState(DEFAULT_AVATAR);
-  const [showImageModal, setShowImageModal] = useState(false);
-  const [modalImageUrl, setModalImageUrl] = useState("");
+  // --- 2. การจัดการรูปภาพ (State) ---
+  const [coverUrl, setCoverUrl] = useState(DEFAULT_COVER);       // URL รูปปก
+  const [avatarUrl, setAvatarUrl] = useState(DEFAULT_AVATAR);    // URL รูปโปรไฟล์
+  const [showImageModal, setShowImageModal] = useState(false);   // เปิด Modal ดูรูปไหม
+  const [modalImageUrl, setModalImageUrl] = useState("");        // URL รูปใน Modal
 
-  // --- State: Posts ---
-  const [posts, setPosts] = useState<FeedPost[]>([]);
+  // --- 3. การจัดการโพสต์ (State) ---
+  const [posts, setPosts] = useState<FeedPost[]>([]);            // รายการโพสต์ในกลุ่ม
 
-  // --- Helper: กำหนดสิทธิ์ ---
-  const isOwner = userId === group?.owner_id;
-  const isPostingAllowed = group?.allow_members_to_post ?? true; // Default เป็น true ถ้าไม่ได้ระบุ
+  // --- 4. ตัวแปรตรวจสอบสิทธิ์ (Helpers) ---
+  const isOwner = userId === group?.owner_id; // เป็นเจ้าของกลุ่มหรือไม่
+  const isPostingAllowed = group?.allow_members_to_post ?? true; // สมาชิกโพสต์ได้ไหม
 
-  // ----------------------------------------------------------------------
-  // --- Data Fetching: โพสต์ ---
-  // ----------------------------------------------------------------------
+  // ====================================================================
+  // ส่วนดึงข้อมูล (Data Fetching)
+  // ====================================================================
 
-  /** ฟังก์ชันดึงโพสต์ทั้งหมดของกลุ่มและจัดรูปแบบข้อมูล */
+  /** ฟังก์ชันดึงโพสต์ทั้งหมดของกลุ่ม (ใช้ useCallback เพื่อไม่ให้สร้างฟังก์ชันใหม่ซ้ำๆ) */
   const fetchGroupPosts = useCallback(
     async (currentUserId: string | null) => {
       if (!groupId) return;
 
-      // 1. ดึงโพสต์พร้อมข้อมูล User, Likes, และ Comments
+      // 1. ดึงโพสต์ + ข้อมูลผู้โพสต์ + ไลค์ + คอมเมนต์
       const { data: postData } = await supabase
         .from("posts")
         .select(
@@ -104,10 +109,11 @@ export default function GroupDetailPage() {
         .eq("group_id", groupId)
         .order("created_at", { ascending: false }); // โพสต์ล่าสุดอยู่บน
 
-      // 2. จัดรูปแบบข้อมูลให้เข้ากับ FeedPost Type
+      // 2. แปลงข้อมูลให้เป็น Format ที่หน้าเว็บต้องการ (FeedPost)
       const formattedPosts: FeedPost[] = (
         (postData as PostFromDB[]) || []
       ).map((p) => {
+        // เช็คว่าผู้ใช้ปัจจุบันกดไลค์โพสต์นี้หรือยัง
         const didUserLike =
           p.likes?.some((like) => like.user_id === currentUserId) || false;
         const postUser = p.user;
@@ -117,10 +123,10 @@ export default function GroupDetailPage() {
           group_id: p.group_id,
           user_id: p.user_id,
           content: p.content,
-          media_urls: p.media_urls || [], // รับประกันว่าเป็น Array ว่าง
+          media_urls: p.media_urls || [], // กันค่า null
           likes_count: p.likes?.length || 0,
           liked_by_user: didUserLike,
-          comments: (p.comments || []) as CommentWithUser[], // รับประกันว่าเป็น Array ว่าง
+          comments: (p.comments || []) as CommentWithUser[],
           created_at: p.created_at,
           user: {
             id: postUser?.id || "",
@@ -135,20 +141,21 @@ export default function GroupDetailPage() {
     [groupId]
   );
 
-  // ----------------------------------------------------------------------
-  // --- Data Fetching: ข้อมูลกลุ่มและสถานะการติดตาม ---
-  // ----------------------------------------------------------------------
+  /** โหลดข้อมูลหลักเมื่อเข้าสู่หน้าเว็บ (Effect) */
   useEffect(() => {
     const fetchData = async () => {
       setLoading(true);
+      
+      // ตรวจสอบผู้ใช้ปัจจุบัน
       const {
         data: { user },
       } = await supabase.auth.getUser();
       const currentUserId = user?.id || null;
       setUserId(currentUserId);
+      
       if (!groupId) return;
 
-      // 1. ดึงข้อมูลกลุ่มหลัก
+      // 1. ดึงข้อมูลรายละเอียดกลุ่ม
       const { data: groupData } = await supabase
         .from("groups")
         .select("*, allow_members_to_post")
@@ -156,20 +163,19 @@ export default function GroupDetailPage() {
         .single<GroupMinimal>();
       setGroup(groupData || null);
 
-      // 2. ดึง Signed URL ของ Cover และ Avatar
+      // 2. สร้าง URL รูปภาพ (Signed URL เพื่อความปลอดภัยและเข้าถึงได้ชั่วคราว)
       let fetchedAvatarUrl = DEFAULT_AVATAR;
       let fetchedCoverUrl = DEFAULT_COVER;
 
       if (groupData) {
-        // ดึง Cover URL
+        // รูปปก
         if (groupData.cover_url) {
           const { data, error } = await supabase.storage
             .from("groups")
-            // สร้าง Signed URL สำหรับรูปภาพ (หมดอายุใน 1 ชม.)
-            .createSignedUrl(groupData.cover_url.replace(/^\/+/, ""), 3600); 
+            .createSignedUrl(groupData.cover_url.replace(/^\/+/, ""), 3600); // อายุ 1 ชม.
           if (!error) fetchedCoverUrl = data.signedUrl;
         }
-        // ดึง Avatar URL
+        // รูปโปรไฟล์
         if (groupData.avatar_url) {
           const { data, error } = await supabase.storage
             .from("groups")
@@ -180,7 +186,7 @@ export default function GroupDetailPage() {
       setCoverUrl(fetchedCoverUrl);
       setAvatarUrl(fetchedAvatarUrl);
 
-      // 3. ตรวจสอบสถานะการติดตาม (ถ้ามี User ID)
+      // 3. ตรวจสอบว่าผู้ใช้ติดตามกลุ่มนี้อยู่หรือไม่
       if (currentUserId && groupData) {
         const { data: followData } = await supabase
           .from("group_members")
@@ -198,7 +204,7 @@ export default function GroupDetailPage() {
         .eq("group_id", groupId);
       setFollowersCount(count || 0);
 
-      // 5. อัปเดตสถานะการอ่านล่าสุด (เพื่อรีเซ็ต Badge แจ้งเตือนใน NavbarSub)
+      // 5. บันทึกว่าผู้ใช้อ่านกลุ่มนี้ล่าสุดเมื่อไหร่ (เพื่อเคลียร์แจ้งเตือน)
       if (currentUserId && groupData) {
         const { error } = await supabase.from("user_group_read_status").upsert(
           {
@@ -211,58 +217,59 @@ export default function GroupDetailPage() {
         if (error) console.error("Failed to update read status:", error);
       }
 
-      // 6. ดึงโพสต์ของกลุ่ม
+      // 6. ดึงรายการโพสต์
       await fetchGroupPosts(currentUserId);
       setLoading(false);
     };
+    
     fetchData();
-  }, [groupId, fetchGroupPosts, router, refreshGroups]); 
-  // Dependency: refreshGroups ถูกเพิ่มเข้ามาเพื่อใช้ใน HandleFollowToggle
+  }, [groupId, fetchGroupPosts, router, refreshGroups]);
 
-  // ----------------------------------------------------------------------
-  // --- Handlers: การจัดการกลุ่มและโพสต์ ---
-  // ----------------------------------------------------------------------
+  // ====================================================================
+  // ฟังก์ชันจัดการเหตุการณ์ (Handlers)
+  // ====================================================================
 
-  /** Toggle การติดตาม/เลิกติดตามกลุ่ม */
+  /** กดติดตาม / เลิกติดตาม */
   const handleFollowToggle = async () => {
     if (!userId || !group) return;
     
-    // Optimistic Update
+    // อัปเดต UI ทันที (Optimistic Update)
     setIsFollowing((prev) => !prev);
     setFollowersCount((prev) => (isFollowing ? prev - 1 : prev + 1));
 
     try {
       if (isFollowing) {
-        // Unfollow: ลบแถว
+        // เลิกติดตาม: ลบออกจากตารางสมาชิก
         await supabase
           .from("group_members")
           .delete()
           .eq("user_id", userId)
           .eq("group_id", group.id);
       } else {
-        // Follow: เพิ่มแถว
+        // ติดตาม: เพิ่มเข้าตารางสมาชิก
         await supabase
           .from("group_members")
           .insert([{ user_id: userId, group_id: group.id }]);
-        await fetchGroupPosts(userId); // ดึงโพสต์ใหม่หลังจากติดตามแล้ว
+        
+        await fetchGroupPosts(userId); // โหลดโพสต์ใหม่เผื่อมีเนื้อหาเฉพาะสมาชิก
       }
-      refreshGroups(); // อัปเดตรายการกลุ่มที่ติดตามใน Context
+      refreshGroups(); // อัปเดต Sidebar
     } catch (e) {
-      // Rollback UI
+      // ถ้า Error ให้ย้อนค่า UI กลับ
       setIsFollowing((prev) => !prev);
       setFollowersCount((prev) => (isFollowing ? prev + 1 : prev - 1));
       console.error("Follow toggle failed:", e);
     }
   };
 
-  /** 🛑 Logic การลบกลุ่มและไฟล์สื่อทั้งหมด */
+  /** ลบกลุ่มและข้อมูลที่เกี่ยวข้องทั้งหมด */
   const handleDeleteGroup = async () => {
     if (!group || !window.confirm("คุณต้องการลบกลุ่มนี้จริงหรือไม่?")) return;
 
     try {
-      setLoading(true); // เพิ่ม Loading
+      setLoading(true);
 
-      // 1. ดึงโพสต์ทั้งหมดในกลุ่มเพื่อหา Path ของไฟล์สื่อ (Post Media)
+      // 1. หาไฟล์รูป/วิดีโอในโพสต์ทั้งหมดของกลุ่มเพื่อลบ
       const { data: postsData } = await supabase
         .from('posts')
         .select('media_urls')
@@ -271,22 +278,18 @@ export default function GroupDetailPage() {
       const pathsToDelete: string[] = [];
 
       if (postsData) {
-        // รวบรวม Path ของไฟล์สื่อทั้งหมด
         (postsData as { media_urls: string[] | null }[]).forEach(post => {
           if (post.media_urls) {
             post.media_urls.forEach((url: string) => { 
-              const bucketName = "post_media";
-              const pathSegment = `/${bucketName}/`;
-              
-              // พยายามแปลง Public URL กลับเป็น Path ใน Storage (เพื่อความแน่ใจ)
+              // พยายามแปลง URL เป็น Path ใน Storage
               if (url.startsWith("http")) {
                 try {
                   const urlObj = new URL(url);
+                  const pathSegment = `/post_media/`;
                   const path = urlObj.pathname.split(pathSegment)[1];
                   if (path) pathsToDelete.push(path);
                 } catch (e) {
-                  // Fallback: ถ้าแปลง URL ไม่ได้ ให้ถือว่าเป็น Path
-                  pathsToDelete.push(url);
+                  pathsToDelete.push(url); // ถ้าแปลงไม่ได้ ให้ใช้ค่าเดิม
                 }
               } else {
                 pathsToDelete.push(url); // ถ้าเป็น Path อยู่แล้ว
@@ -296,24 +299,22 @@ export default function GroupDetailPage() {
         });
       }
 
-      // 2. ลบไฟล์สื่อโพสต์ออกจาก Bucket "post_media"
+      // 2. สั่งลบไฟล์สื่อออกจาก Storage
       if (pathsToDelete.length > 0) {
         await supabase.storage.from("post_media").remove(pathsToDelete);
-        console.log(`Successfully deleted ${pathsToDelete.length} post media files.`);
       }
 
-      // 3. ลบรูป Avatar และ Cover ของกลุ่ม (จาก "groups" bucket)
+      // 3. ลบรูปโปรไฟล์และปกกลุ่มออกจาก Storage
       if (group.avatar_url)
         await supabase.storage.from("groups").remove([group.avatar_url.replace(/^\/+/, "")]);
       if (group.cover_url)
         await supabase.storage.from("groups").remove([group.cover_url.replace(/^\/+/, "")]);
 
-      // 4. ลบข้อมูลกลุ่มออกจาก Database
-      // (Supabase RLS/Foreign Keys ควรจะดูแลการลบ Likes, Comments, Posts, GroupMembers ที่เกี่ยวข้องทั้งหมด)
+      // 4. ลบข้อมูลกลุ่มจาก Database (Cascade Delete จะลบโพสต์/สมาชิก ให้เองตาม Foreign Key)
       const { error: deleteError } = await supabase.from("groups").delete().eq("id", group.id);
       if (deleteError) throw deleteError;
       
-      // 5. Redirect และอัปเดต Context
+      // 5. กลับไปหน้ารวมกลุ่ม
       refreshGroups();
       router.push("/groups");
 
@@ -324,8 +325,7 @@ export default function GroupDetailPage() {
     }
   };
 
-
-  /** เพิ่มโพสต์ใหม่ไปยัง Feed (Optimistic/Local Update) */
+  /** เพิ่มโพสต์ใหม่ลงหน้าจอ (Local Update) */
   const handleNewPost = (post: SupabasePostWithUser) => {
     setPosts((prev) => [
       {
@@ -339,12 +339,12 @@ export default function GroupDetailPage() {
     ]);
   };
 
-  /** ลบโพสต์ออกจาก Feed (Local Update) */
+  /** ลบโพสต์ออกจากหน้าจอ (Local Update) */
   const handlePostDeleted = (postId: string) => {
     setPosts((prev) => prev.filter((p) => p.id !== postId));
   };
 
-  /** อัปเดตโพสต์ใน Feed (Local Update) */
+  /** อัปเดตข้อมูลโพสต์ในหน้าจอ (Local Update) */
   const handlePostUpdated = (updatedPost: SupabasePostWithUser) => {
     setPosts((prev) =>
       prev.map((p) =>
@@ -355,22 +355,20 @@ export default function GroupDetailPage() {
     );
   };
 
-  /** เปิด Modal แสดงรูปภาพขยาย */
+  /** เปิด Modal ดูรูป */
   const handleImageClick = (imageUrl: string) => {
     setModalImageUrl(imageUrl);
     setShowImageModal(true);
   };
 
+  // ====================================================================
+  // ส่วนแสดงผล (Render UI)
+  // ====================================================================
 
-  // ----------------------------------------------------------------------
-  // --- Render ---
-  // ----------------------------------------------------------------------
-  if (loading)
-    return <p className="p-4 text-center text-gray-500">Loading...</p>;
-  if (!group)
-    return <p className="p-4 text-center text-red-500">Group not found</p>;
+  if (loading) return <p className="p-4 text-center text-gray-500">Loading...</p>;
+  if (!group) return <p className="p-4 text-center text-red-500">Group not found</p>;
 
-  // Component ย่อยสำหรับ Modal (เพื่อลดความซ้ำซ้อนใน JSX)
+  // Component ย่อย: Modal แสดงรูปภาพขยาย
   const ImagePreviewModal = () => (
     <div
       className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4"
@@ -386,11 +384,9 @@ export default function GroupDetailPage() {
           unoptimized
         />
       </div>
-      {/* ปุ่มปิด */}
       <button
         onClick={() => setShowImageModal(false)}
         className="fixed top-4 right-4 text-white text-2xl font-bold w-10 h-10 flex items-center justify-center rounded-full hover:bg-white hover:bg-opacity-20 transition z-50 leading-none"
-        aria-label="ปิด"
       >
         &times;
       </button>
@@ -399,12 +395,14 @@ export default function GroupDetailPage() {
 
   return (
     <div className="max-w-6xl mx-auto p-6 space-y-8 bg-gray-50 min-h-screen">
-      {/* Image Modal (แสดงรูป Cover/Avatar ขยาย) */}
+      
+      {/* Modal รูปภาพ */}
       {showImageModal && <ImagePreviewModal />}
 
-      {/* 1. Group Header */}
+      {/* 1. ส่วนหัวของกลุ่ม (Header) */}
       <div className="bg-white rounded-2xl shadow-lg border border-gray-200 overflow-hidden">
-        {/* ส่วนรูปปก (Cover) */}
+        
+        {/* รูปปก (Cover Image) */}
         <div
           className={`relative w-full h-44 md:h-52 lg:h-60 ${
             coverUrl !== DEFAULT_COVER ? "cursor-pointer group" : ""
@@ -423,7 +421,7 @@ export default function GroupDetailPage() {
                 unoptimized
               />
               <div className="absolute inset-0 bg-black/10" />
-              {/* Hover Effect */}
+              {/* ข้อความบอกให้คลิกเมื่อเอาเมาส์ชี้ */}
               <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
                 <span className="bg-black/50 text-white px-4 py-2 rounded-full text-sm font-semibold">
                   คลิกเพื่อดูรูป
@@ -433,10 +431,11 @@ export default function GroupDetailPage() {
           )}
         </div>
 
-        {/* ข้อมูลกลุ่ม, Avatar, และปุ่ม */}
+        {/* ข้อมูลกลุ่มและปุ่มต่างๆ */}
         <div className="px-6 pb-6 pt-6 relative z-10 flex flex-col md:flex-row justify-between items-center gap-6">
           <div className="flex items-center gap-5">
-            {/* รูปโปรไฟล์ (Avatar) */}
+            
+            {/* รูปโปรไฟล์กลุ่ม (Avatar) */}
             <div
               className="w-28 h-28 md:w-32 md:h-32 rounded-full overflow-hidden border-4 border-white shadow-xl bg-gray-100 cursor-pointer flex items-center justify-center shrink-0 aspect-square"
               onClick={() =>
@@ -468,10 +467,10 @@ export default function GroupDetailPage() {
             </div>
           </div>
 
-          {/* ปุ่มดำเนินการ (แก้ไข/ลบ/ติดตาม) */}
+          {/* ปุ่ม Action (แก้ไข/ลบ หรือ ติดตาม) */}
           <div className="flex flex-row gap-3 mt-4 md:mt-0">
             {isOwner ? (
-              // ปุ่มสำหรับ Owner
+              // กรณีเป็นเจ้าของ: ปุ่มแก้ไขและลบ
               <>
                 <button
                   onClick={() => router.push(`/groups/${group.id}/edit`)}
@@ -487,7 +486,7 @@ export default function GroupDetailPage() {
                 </button>
               </>
             ) : (
-              // ปุ่มสำหรับ Member/Guest
+              // กรณีเป็นสมาชิกทั่วไป: ปุ่มติดตาม
               <button
                 onClick={handleFollowToggle}
                 className={`px-5 py-2.5 rounded-full font-semibold transition shadow-md cursor-pointer hover:scale-105 active:scale-93 ${
@@ -503,11 +502,12 @@ export default function GroupDetailPage() {
         </div>
       </div>
 
-      {/* 2. Main Content (3 คอลัมน์) */}
+      {/* 2. เนื้อหาหลัก (Grid Layout) */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mt-6">
-        {/* คอลัมน์ซ้าย: รายละเอียดกลุ่มและปฏิทิน */}
+        
+        {/* คอลัมน์ซ้าย (ข้อมูลกลุ่ม, ปฏิทิน) */}
         <div className="md:col-span-1 space-y-6">
-          {/* รายละเอียดกลุ่ม */}
+          {/* คำอธิบายกลุ่ม */}
           {group.description && (
             <div className="bg-white p-6 rounded-xl shadow-md border border-gray-200">
               <h2 className="text-xl font-bold text-gray-800 mb-3">
@@ -519,7 +519,7 @@ export default function GroupDetailPage() {
             </div>
           )}
 
-          {/* ปฏิทินกิจกรรม */}
+          {/* ปฏิทิน */}
           <div className="bg-white p-6 rounded-xl shadow-md border border-gray-200">
             <h2 className="text-xl font-bold text-gray-800 mb-3">
               ปฏิทินกิจกรรม
@@ -528,9 +528,10 @@ export default function GroupDetailPage() {
           </div>
         </div>
 
-        {/* คอลัมน์ขวา: กล่องโพสต์และ Feed */}
+        {/* คอลัมน์ขวา (โพสต์, Feed) */}
         <div className="md:col-span-2 space-y-6">
-          {/* กล่องโพสต์ (แสดงเมื่อมีสิทธิ์) */}
+          
+          {/* กล่องเขียนโพสต์ (แสดงเฉพาะผู้มีสิทธิ์) */}
           {userId && (isOwner || isPostingAllowed) && (
             <PostInputBar
               groupId={group.id}
@@ -542,7 +543,7 @@ export default function GroupDetailPage() {
             />
           )}
 
-          {/* Feed โพสต์ */}
+          {/* รายการโพสต์ (Feed) */}
           <PostFeed
             posts={posts}
             groupName={group.name}

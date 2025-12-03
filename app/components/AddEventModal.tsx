@@ -1,67 +1,90 @@
-"use client";
+"use client"; // แจ้ง Next.js ว่าไฟล์นี้ทำงานที่ฝั่ง Browser (Client Side)
 
-import React, { useState, useEffect, FormEvent } from "react";
-import { supabase } from "@/lib/supabase/client";
+import React, { useState, useEffect } from "react";
+import { supabase } from "@/lib/supabase/client"; // เครื่องมือเชื่อมต่อฐานข้อมูล Supabase
 
-// ----------------------------------------------------------------------
-// --- กำหนดโครงสร้างข้อมูล (Interfaces) ---
-// ----------------------------------------------------------------------
+// ====================================================================
+// ส่วนกำหนดรูปแบบข้อมูล (Interfaces)
+// ====================================================================
+
+// โครงสร้างข้อมูลของกิจกรรม (Event)
 interface CalendarEvent {
   id: string;
   group_id: string;
   user_id: string | null;
   title: string;
   description?: string | null;
-  start_time: string; // ISO string (บันทึกในฐานข้อมูล)
-  end_time: string; // ISO string (บันทึกในฐานข้อมูล)
+  start_time: string; // เวลาเริ่ม (ISO string)
+  end_time: string;   // เวลาจบ (ISO string)
 }
 
+// ข้อมูลที่ Component นี้ต้องการ (Props)
 interface AddEventModalProps {
-  groupId: string;
-  userId: string | null;
-  onClose: () => void;
-  eventToEdit?: CalendarEvent | null; // ถ้ามีข้อมูลส่งมา แสดงว่าเป็นการ "แก้ไข"
+  groupId: string;        // รหัสกลุ่ม
+  userId: string | null;  // รหัสผู้ใช้
+  onClose: () => void;    // ฟังก์ชันปิดหน้าต่าง
+  eventToEdit?: CalendarEvent | null; // ข้อมูลกิจกรรมเดิม (ถ้าเป็นการแก้ไข)
 }
 
-// ----------------------------------------------------------------------
-// --- Component หลัก: Modal เพิ่ม/แก้ไขกิจกรรม ---
-// ----------------------------------------------------------------------
+// ====================================================================
+// Component หลัก: หน้าต่างเพิ่ม/แก้ไขกิจกรรม (AddEventModal)
+// ====================================================================
+
 const AddEventModal: React.FC<AddEventModalProps> = ({
   groupId,
   userId,
   onClose,
   eventToEdit = null,
 }) => {
-  // --- Helper: แปลง ISO string เป็น format YYYY-MM-DDTHH:mm ---
-  // เป็น format ที่ input type="datetime-local" ต้องการ
+  
+  // --- 1. ฟังก์ชันช่วย (Helper) ---
+  
+  // แปลงเวลาจาก ISO (2023-10-25T10:00:00.000Z) เป็น format ที่ input type="datetime-local" เข้าใจ (2023-10-25T10:00)
   const toLocalDatetime = (isoString: string | undefined): string => {
     if (!isoString) return "";
-    // สร้าง Date object จาก ISO string และแปลงเป็น YYYY-MM-DDTHH:mm
     return new Date(isoString).toISOString().slice(0, 16);
   };
 
-  // --- State: จัดการข้อมูลในฟอร์ม (กำหนดค่าเริ่มต้นจาก eventToEdit ถ้ามี) ---
+  // --- 2. การจัดการข้อมูล (State) ---
+
+  // ข้อมูลในฟอร์ม (ถ้ามี eventToEdit ให้ดึงมาใส่เลย ถ้าไม่มีให้เป็นค่าว่าง)
   const [title, setTitle] = useState(eventToEdit?.title || "");
   const [description, setDescription] = useState(eventToEdit?.description || "");
-  const [startTime, setStartTime] = useState(
-    toLocalDatetime(eventToEdit?.start_time)
-  );
-  const [endTime, setEndTime] = useState(
-    toLocalDatetime(eventToEdit?.end_time)
-  );
+  const [startTime, setStartTime] = useState(toLocalDatetime(eventToEdit?.start_time));
+  const [endTime, setEndTime] = useState(toLocalDatetime(eventToEdit?.end_time));
 
-  // --- State: สถานะการทำงาน ---
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [success, setSuccess] = useState(false);
+  // สถานะการทำงาน
+  const [loading, setLoading] = useState(false);          // กำลังบันทึกหรือไม่
+  const [error, setError] = useState<string | null>(null);// ข้อความ Error
+  const [success, setSuccess] = useState(false);          // บันทึกสำเร็จหรือไม่
 
-  // --- Logic: บันทึกข้อมูล (Submit Handler) ---
+  // --- 3. ตั้งค่าฟอร์มเมื่อโหมดเปลี่ยน (Effect) ---
+  
+  // เมื่อ eventToEdit เปลี่ยน (เช่น เปลี่ยนจากโหมดเพิ่ม เป็นโหมดแก้ไข หรือเปลี่ยนกิจกรรมที่เลือก)
+  useEffect(() => {
+    if (eventToEdit) {
+      // โหมดแก้ไข: เอาข้อมูลเดิมมาใส่ในช่อง
+      setTitle(eventToEdit.title);
+      setDescription(eventToEdit.description || "");
+      setStartTime(toLocalDatetime(eventToEdit.start_time));
+      setEndTime(toLocalDatetime(eventToEdit.end_time));
+    } else {
+      // โหมดเพิ่มใหม่: ล้างช่องให้ว่าง
+      setTitle("");
+      setDescription("");
+      setStartTime("");
+      setEndTime("");
+    }
+  }, [eventToEdit]);
+
+  // --- 4. ฟังก์ชันบันทึกข้อมูล (Submit Handler) ---
+
   const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setError(null);
-    setSuccess(false);
+    e.preventDefault(); // ห้ามรีเฟรชหน้า
+    setError(null);     // ล้าง Error เก่า
+    setSuccess(false);  // ล้างสถานะสำเร็จเก่า
 
-    // 1. ตรวจสอบข้อมูลเบื้องต้น
+    // ตรวจสอบความถูกต้อง (Validation)
     if (!title || !startTime || !endTime) {
       setError("กรุณากรอกข้อมูลให้ครบ");
       return;
@@ -71,15 +94,15 @@ const AddEventModal: React.FC<AddEventModalProps> = ({
       return;
     }
 
-    setLoading(true);
+    setLoading(true); // เริ่มบันทึก
 
-    // แปลง datetime-local string กลับเป็น ISO string ที่ Supabase ต้องการ
+    // แปลงเวลากลับเป็น ISO format เพื่อเก็บใน DB
     const isoStartTime = new Date(startTime).toISOString();
     const isoEndTime = new Date(endTime).toISOString();
 
     try {
       if (eventToEdit) {
-        // กรณีแก้ไข: อัปเดตข้อมูลเดิมในฐานข้อมูล
+        // --- กรณีแก้ไข (Update) ---
         const { error: updateError } = await supabase
           .from("calendar_events")
           .update({
@@ -88,11 +111,12 @@ const AddEventModal: React.FC<AddEventModalProps> = ({
             start_time: isoStartTime,
             end_time: isoEndTime,
           })
-          .eq("id", eventToEdit.id);
+          .eq("id", eventToEdit.id); // อัปเดตที่ ID นี้เท่านั้น
 
         if (updateError) throw updateError;
+
       } else {
-        // กรณีเพิ่มใหม่: เพิ่มแถวใหม่ลงฐานข้อมูล
+        // --- กรณีเพิ่มใหม่ (Insert) ---
         const { error: insertError } = await supabase
           .from("calendar_events")
           .insert([
@@ -109,43 +133,31 @@ const AddEventModal: React.FC<AddEventModalProps> = ({
         if (insertError) throw insertError;
       }
 
-      // 2. สำเร็จ: แจ้งเตือนและปิด Modal อัตโนมัติ
+      // บันทึกสำเร็จ
       setSuccess(true);
+      
+      // รอ 1 วินาที แล้วปิดหน้าต่าง (เพื่อให้ผู้ใช้เห็นข้อความสำเร็จก่อน)
       setTimeout(() => {
-        onClose(); // เรียก onClose เพื่อปิด Modal และโหลดกิจกรรมใหม่ใน Parent
+        onClose(); 
       }, 1000);
+
     } catch (err) {
       console.error(err);
       setError((err as Error).message || "เกิดข้อผิดพลาดที่ไม่คาดคิด");
     } finally {
-      setLoading(false);
+      setLoading(false); // จบการทำงาน
     }
   };
 
-  // --- Effect: อัปเดตฟอร์มเมื่อเปลี่ยน Event ที่จะแก้ไข ---
-  useEffect(() => {
-    if (eventToEdit) {
-      // ตั้งค่าฟอร์มด้วยข้อมูลเดิม (สำหรับโหมดแก้ไข)
-      setTitle(eventToEdit.title);
-      setDescription(eventToEdit.description || "");
-      setStartTime(toLocalDatetime(eventToEdit.start_time));
-      setEndTime(toLocalDatetime(eventToEdit.end_time));
-    } else {
-      // เคลียร์ค่าฟอร์ม (สำหรับโหมดเพิ่มใหม่)
-      setTitle("");
-      setDescription("");
-      setStartTime("");
-      setEndTime("");
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [eventToEdit]); // ทำงานเมื่อ eventToEdit เปลี่ยน
-
+  // --- 5. ส่วนแสดงผลหน้าจอ (Render UI) ---
   return (
-    // --- UI: Modal Overlay (Fixed Position) ---
+    // ฉากหลังสีดำจางๆ (Modal Overlay)
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-gray-900/60 backdrop-blur-sm transition-opacity duration-300">
+      
+      {/* กล่องเนื้อหา Modal */}
       <div className="bg-white w-full max-w-lg rounded-2xl shadow-2xl max-h-[90vh] flex flex-col overflow-hidden">
         
-        {/* ส่วนหัว Modal */}
+        {/* ส่วนหัว (Header) */}
         <div className="px-6 py-5 bg-gradient-to-r from-sky-500 to-blue-600 flex justify-between items-center shrink-0">
           <h2 className="text-xl font-bold text-white">
             {eventToEdit ? "แก้ไขกิจกรรม" : "เพิ่มวันสำคัญ"}
@@ -160,11 +172,11 @@ const AddEventModal: React.FC<AddEventModalProps> = ({
           </button>
         </div>
 
-        {/* ส่วนฟอร์ม (Scrollable) */}
+        {/* ส่วนฟอร์ม (Scrollable Body) */}
         <div className="flex-1 overflow-y-auto p-6 sm:p-8">
           <form onSubmit={handleSubmit} className="flex flex-col gap-5">
             
-            {/* ช่องกรอกชื่อกิจกรรม */}
+            {/* ช่องชื่อกิจกรรม */}
             <div>
               <label className="block text-sm font-semibold text-gray-700">
                 ชื่อกิจกรรม <span className="text-red-500">*</span>
@@ -178,7 +190,7 @@ const AddEventModal: React.FC<AddEventModalProps> = ({
               />
             </div>
 
-            {/* ช่องกรอกรายละเอียด */}
+            {/* ช่องรายละเอียด */}
             <div>
               <label className="block text-sm font-semibold text-gray-700">
                 รายละเอียด
@@ -191,8 +203,10 @@ const AddEventModal: React.FC<AddEventModalProps> = ({
               />
             </div>
 
-            {/* ช่องเลือกวันเวลาเริ่มต้น-สิ้นสุด (Datetime-local) */}
+            {/* ช่องวันเวลา (แบ่ง 2 คอลัมน์) */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+              
+              {/* วันเริ่มต้น */}
               <div>
                 <label className="block text-sm font-semibold text-gray-700">
                   วันเริ่มต้น <span className="text-red-500">*</span>
@@ -205,6 +219,8 @@ const AddEventModal: React.FC<AddEventModalProps> = ({
                   required
                 />
               </div>
+              
+              {/* วันสิ้นสุด */}
               <div>
                 <label className="block text-sm font-semibold text-gray-700">
                   วันสิ้นสุด <span className="text-red-500">*</span>
@@ -219,7 +235,7 @@ const AddEventModal: React.FC<AddEventModalProps> = ({
               </div>
             </div>
 
-            {/* ข้อความแจ้งเตือน Error / Success */}
+            {/* ข้อความแจ้งเตือน (Error / Success) */}
             {error && (
               <div className="p-3 bg-red-50 text-red-700 rounded-md">
                 {error}
@@ -231,7 +247,7 @@ const AddEventModal: React.FC<AddEventModalProps> = ({
               </div>
             )}
 
-            {/* ปุ่มดำเนินการ (ยกเลิก / บันทึก) */}
+            {/* ปุ่มดำเนินการ */}
             <div className="flex justify-end gap-3 mt-4 pt-4 border-t border-gray-100">
               <button
                 type="button"

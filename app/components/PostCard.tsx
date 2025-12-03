@@ -1,14 +1,15 @@
-"use client";
+"use client"; // แจ้ง Next.js ว่าไฟล์นี้ทำงานที่ฝั่ง Browser (Client Side)
 
 import Image from "next/image";
 import type { PostWithUser, CommentWithUser } from "@/types/supabase";
-import { supabase } from "@/lib/supabase/client";
+import { supabase } from "@/lib/supabase/client"; // เครื่องมือเชื่อมต่อฐานข้อมูล Supabase
 import { useState, useRef, useEffect, ChangeEvent } from "react";
-import { Heart, MessageSquare, UsersRound } from "lucide-react";
+import { Heart, MessageSquare, UsersRound } from "lucide-react"; // ไอคอนต่างๆ
 
-// ----------------------------------------------------------------------
-// --- Component ย่อย: MediaModal (Modal แสดงรูปภาพ/วิดีโอขนาดใหญ่) ---
-// ----------------------------------------------------------------------
+// ====================================================================
+// Component ย่อย: MediaModal (หน้าต่างแสดงรูป/วิดีโอขนาดใหญ่)
+// ====================================================================
+
 const MediaModal = ({
   mediaUrl,
   onClose,
@@ -16,9 +17,9 @@ const MediaModal = ({
   mediaUrl: string;
   onClose: () => void;
 }) => {
-  if (!mediaUrl) return null;
+  if (!mediaUrl) return null; // ถ้าไม่มี URL ไม่ต้องแสดง
 
-  // ตรวจสอบว่าเป็นวิดีโอหรือไม่ (รองรับนามสกุลพื้นฐาน)
+  // ตรวจสอบว่าเป็นไฟล์วิดีโอหรือไม่
   const isVideo =
     mediaUrl.endsWith(".mp4") ||
     mediaUrl.endsWith(".webm") ||
@@ -27,28 +28,27 @@ const MediaModal = ({
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-90 p-4"
-      onClick={onClose} // ปิด Modal เมื่อคลิกนอกเนื้อหา
+      onClick={onClose} // คลิกพื้นที่ว่างเพื่อปิด
     >
       <div
-        // Parent Container: จำกัดขนาดและป้องกันการปิด Modal เมื่อคลิกที่เนื้อหา
         className="relative w-full max-w-4xl max-h-[90vh] h-full flex items-center justify-center"
-        onClick={(e) => e.stopPropagation()}
+        onClick={(e) => e.stopPropagation()} // คลิกที่เนื้อหาไม่ปิด Modal
       >
         {isVideo ? (
-          // แสดงวิดีโอ (ใช้แท็ก <video>)
+          // แสดงวิดีโอ
           <video
             src={mediaUrl}
             controls
             className="w-full h-full max-h-[90vh] object-contain rounded-xl"
-            autoPlay // เล่นอัตโนมัติเมื่อเปิด
+            autoPlay
           />
         ) : (
-          // แสดงรูปภาพ (ใช้ Next.js Image เพื่อให้ยืดหยุ่น)
+          // แสดงรูปภาพ
           <div className="relative w-full h-full max-h-[90vh]">
             <Image
               src={mediaUrl}
               alt="Full size media"
-              className="object-contain" // แสดงทั้งรูป ไม่ถูกตัด
+              className="object-contain"
               fill
               sizes="90vw"
               unoptimized
@@ -56,7 +56,7 @@ const MediaModal = ({
           </div>
         )}
       </div>
-      {/* ปุ่มปิด Modal (x) */}
+      {/* ปุ่มกากบาทปิด Modal */}
       <button
         onClick={onClose}
         className="fixed top-4 right-4 text-white text-2xl font-bold w-10 h-10 flex items-center justify-center rounded-full hover:bg-white hover:bg-opacity-20 transition z-50 leading-none"
@@ -68,9 +68,10 @@ const MediaModal = ({
   );
 };
 
-// ----------------------------------------------------------------------
-// --- กำหนด Props ของ Component หลัก ---
-// ----------------------------------------------------------------------
+// ====================================================================
+// ส่วนกำหนดรูปแบบข้อมูล (Interfaces & Constants)
+// ====================================================================
+
 interface PostCardProps {
   post: PostWithUser & {
     media_urls: string[];
@@ -81,18 +82,19 @@ interface PostCardProps {
   };
   groupName: string;
   groupAvatar?: string | null;
-  userId?: string | null; // ID ผู้ใช้งานปัจจุบัน
+  userId?: string | null; // ID ผู้ใช้ปัจจุบัน
   onPostDeleted?: (postId: string) => void;
   onPostUpdated?: (updatedPost: PostWithUser) => void;
   groupOwnerId: string; // ID เจ้าของกลุ่ม
 }
 
 const COMMENTS_LIMIT = 3; // จำนวนคอมเมนต์ที่แสดงเริ่มต้น
-const MEDIA_LIMIT = 5; // จำนวนรูปภาพที่แสดงเริ่มต้น
+const MEDIA_LIMIT = 5;    // จำนวนรูปภาพที่แสดงเริ่มต้น
 
-// ----------------------------------------------------------------------
-// --- Component หลัก: PostCard ---
-// ----------------------------------------------------------------------
+// ====================================================================
+// Component หลัก: การ์ดโพสต์ (PostCard)
+// ====================================================================
+
 export default function PostCard({
   post,
   groupName,
@@ -102,33 +104,34 @@ export default function PostCard({
   onPostUpdated,
   groupOwnerId,
 }: PostCardProps) {
-  // --- State: การแสดงผลและการโต้ตอบพื้นฐาน ---
-  const [selectedMediaUrl, setSelectedMediaUrl] = useState<string | null>(null); // URL สื่อที่ถูกคลิกเพื่อเปิด Modal
-  const [likesCount, setLikesCount] = useState(post.likes_count ?? 0); // จำนวนไลก์ปัจจุบัน
-  const [likedByUser, setLikedByUser] = useState(post.liked_by_user || false); // สถานะว่าผู้ใช้ปัจจุบันกดไลก์หรือไม่
-  const [comments, setComments] = useState<CommentWithUser[]>(
-    post.comments || []
-  ); // รายการคอมเมนต์
-  const [newComment, setNewComment] = useState(""); // ข้อความในช่องคอมเมนต์ใหม่
-  const [showAllComments, setShowAllComments] = useState(false); // สถานะแสดงคอมเมนต์ทั้งหมด
-  const [showAllMedia, setShowAllMedia] = useState(false); // สถานะแสดงรูปภาพ/วิดีโอทั้งหมด
+  
+  // --- 1. การจัดการข้อมูล (State) ---
 
-  // --- State: เมนูและการแก้ไข ---
-  const [isMenuOpen, setIsMenuOpen] = useState(false); // สถานะเปิด/ปิดเมนูตัวเลือก
-  const menuRef = useRef<HTMLDivElement>(null); // Ref สำหรับอ้างอิงเมนูเพื่อตรวจสอบการคลิกนอก
-  const [isEditing, setIsEditing] = useState(false); // สถานะโหมดแก้ไข
+  // State สำหรับการแสดงผลทั่วไป
+  const [selectedMediaUrl, setSelectedMediaUrl] = useState<string | null>(null); // URL รูปที่เปิดดูเต็มจอ
+  const [likesCount, setLikesCount] = useState(post.likes_count ?? 0);           // จำนวนไลก์
+  const [likedByUser, setLikedByUser] = useState(post.liked_by_user || false);   // สถานะกดไลก์
+  const [comments, setComments] = useState<CommentWithUser[]>(post.comments || []); // รายการคอมเมนต์
+  const [newComment, setNewComment] = useState("");                              // ข้อความคอมเมนต์ใหม่
+  const [showAllComments, setShowAllComments] = useState(false);                 // ดูคอมเมนต์ทั้งหมดไหม
+  const [showAllMedia, setShowAllMedia] = useState(false);                       // ดูรูปทั้งหมดไหม
+
+  // State สำหรับเมนูและการแก้ไข
+  const [isMenuOpen, setIsMenuOpen] = useState(false);  // เปิดเมนูตัวเลือกไหม (จุดสามจุด)
+  const menuRef = useRef<HTMLDivElement>(null);         // ตัวอ้างอิงตำแหน่งเมนู
+  const [isEditing, setIsEditing] = useState(false);    // อยู่ในโหมดแก้ไขไหม
   const [editedContent, setEditedContent] = useState(post.content || ""); // เนื้อหาที่กำลังแก้ไข
-  const [isSaving, setIsSaving] = useState(false); // สถานะกำลังบันทึกการแก้ไข
+  const [isSaving, setIsSaving] = useState(false);      // กำลังบันทึกการแก้ไขไหม
 
-  // --- State: จัดการไฟล์มีเดียในโหมดแก้ไข ---
-  const [selectedFiles, setSelectedFiles] = useState<File[]>([]); // ไฟล์ใหม่ที่เลือกเพื่ออัปโหลด
-  const [imagePreviews, setImagePreviews] = useState<string[]>([]); // URL Preview สำหรับไฟล์ใหม่
-  const [existingMediaPaths, setExistingMediaPaths] = useState<string[]>([]); // Path ของไฟล์เดิมที่ยังคงอยู่
-  const [existingMediaToDelete, setExistingMediaToDelete] = useState<string[]>(
-    []
-  ); // Path ของไฟล์เดิมที่ถูกทำเครื่องหมายให้ลบ
+  // State สำหรับจัดการไฟล์ในโหมดแก้ไข
+  const [selectedFiles, setSelectedFiles] = useState<File[]>([]);    // ไฟล์ใหม่ที่เลือกเพิ่ม
+  const [imagePreviews, setImagePreviews] = useState<string[]>([]);  // ตัวอย่างรูปใหม่
+  const [existingMediaPaths, setExistingMediaPaths] = useState<string[]>([]); // รูปเดิมที่ยังอยู่
+  const [existingMediaToDelete, setExistingMediaToDelete] = useState<string[]>([]); // รูปเดิมที่ต้องการลบ
 
-  // --- Effect: ปิดเมนูเมื่อคลิกพื้นที่ภายนอก (Outside Click Handler) ---
+  // --- 2. Effect & Helpers ---
+
+  // ปิดเมนูเมื่อคลิกพื้นที่ด้านนอก
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
@@ -141,28 +144,25 @@ export default function PostCard({
     };
   }, [menuRef]);
 
-  // --- Helper: แปลง Path/URL เป็น Public URL สำหรับ Avatar ---
+  // ฟังก์ชันแปลง Path รูปโปรไฟล์เป็น URL
   const getAvatarPublicUrl = (path: string | null | undefined) => {
     if (!path) return "https://via.placeholder.com/24";
     if (path.startsWith("http://") || path.startsWith("https://")) return path;
-    // ดึง Public URL จาก Supabase Storage bucket 'avatars'
     const { data } = supabase.storage.from("avatars").getPublicUrl(path);
     return data.publicUrl || "https://via.placeholder.com/24";
   };
 
-  // --- Helper: แปลง Path/URL เป็น Public URL สำหรับ Post Media ---
+  // ฟังก์ชันแปลง Path รูปโพสต์เป็น URL
   const getPublicMediaUrl = (urlOrPath: string) => {
     if (urlOrPath.startsWith("http://") || urlOrPath.startsWith("https://"))
       return urlOrPath;
-    // ดึง Public URL จาก Supabase Storage bucket 'post_media'
-    const { data } = supabase.storage
-      .from("post_media")
-      .getPublicUrl(urlOrPath);
+    const { data } = supabase.storage.from("post_media").getPublicUrl(urlOrPath);
     return data.publicUrl || "https://via.placeholder.com/128";
   };
 
-  // --- Logic: กำหนดข้อมูลส่วนหัวของโพสต์ (Avatar & Name) ---
-  // ถ้าโพสต์มาจากเจ้าของกลุ่ม ให้แสดงชื่อและรูปกลุ่มแทน (Custom Logic)
+  // --- 3. เตรียมข้อมูลแสดงผล (Render Logic) ---
+
+  // ตรวจสอบว่าใครเป็นคนโพสต์ (ถ้าเป็นเจ้าของกลุ่ม ให้แสดงในนามกลุ่ม)
   const isPostByOwner = post.user_id === groupOwnerId;
   const postUserAvatarUrl = getAvatarPublicUrl(post.user?.avatar_url);
   const postUsername = post.user?.username || "ผู้ใช้ไม่ทราบชื่อ";
@@ -170,54 +170,56 @@ export default function PostCard({
   const headerAvatarUrl = isPostByOwner ? groupAvatar : postUserAvatarUrl;
   const headerUsername = isPostByOwner ? groupName : postUsername;
 
-  // เตรียมข้อมูล Media สำหรับแสดงผล (แปลง Path เป็น Public URL ก่อน)
+  // เตรียมรายการรูปภาพ/วิดีโอ
   const mediaUrls = post.media_urls.map(getPublicMediaUrl);
-  // จำกัด/ไม่จำกัดจำนวน Media ที่จะแสดง
+  // ตัดแบ่งจำนวนรูปที่จะแสดง
   const mediaToShow = showAllMedia
     ? mediaUrls
     : mediaUrls.slice(0, MEDIA_LIMIT);
   const remainingMediaCount = mediaUrls.length - MEDIA_LIMIT;
 
-  // --- Handlers: จัดการ Modal รูปภาพและ Media Display ---
-  const handleMediaClick = (url: string) => setSelectedMediaUrl(url); // เปิด Modal
-  const handleCloseModal = () => setSelectedMediaUrl(null); // ปิด Modal
-  const handleToggleMedia = () => setShowAllMedia((prev) => !prev); // สลับแสดง Media ทั้งหมด
+  // --- 4. ฟังก์ชันจัดการเหตุการณ์ (Handlers) ---
 
-  // --- Logic: การกดไลก์ (Like/Unlike) ---
+  // เปิด/ปิด Modal รูปภาพ
+  const handleMediaClick = (url: string) => setSelectedMediaUrl(url);
+  const handleCloseModal = () => setSelectedMediaUrl(null);
+  const handleToggleMedia = () => setShowAllMedia((prev) => !prev);
+
+  // การกดไลก์ (Like Toggle)
   const handleLikeToggle = async () => {
-    if (!userId) return; // ต้องล็อกอินก่อน
+    if (!userId) return;
 
-    // 1. Optimistic UI Update (อัปเดต State ทันที)
+    // อัปเดตหน้าจอทันที (Optimistic Update) เพื่อความลื่นไหล
     setLikedByUser((prev) => !prev);
     setLikesCount((prev) => (likedByUser ? prev - 1 : prev + 1));
 
     try {
       if (likedByUser) {
-        // Un-Like: ลบแถวในตาราง 'likes'
+        // ถ้าเคยไลก์แล้ว -> ลบไลก์ออก
         await supabase
           .from("likes")
           .delete()
           .eq("post_id", post.id)
           .eq("user_id", userId as string);
       } else {
-        // Like: เพิ่มแถวในตาราง 'likes'
+        // ถ้ายังไม่ไลก์ -> เพิ่มไลก์
         await supabase
           .from("likes")
           .insert([{ post_id: post.id, user_id: userId as string }]);
       }
     } catch (err) {
       console.error("Error toggling like:", (err as Error).message);
-      // 2. Rollback UI (ถ้าเกิด Error)
+      // ถ้า Error ให้ย้อนค่ากลับ (Rollback)
       setLikedByUser((prev) => !prev);
       setLikesCount((prev) => (likedByUser ? prev + 1 : prev - 1));
     }
   };
 
-  // --- Logic: การเพิ่มคอมเมนต์ ---
+  // การเพิ่มคอมเมนต์
   const handleAddComment = async () => {
     if (!userId || !newComment.trim()) return;
     try {
-      // 1. บันทึกคอมเมนต์และดึง ID ที่สร้างขึ้นกลับมา
+      // บันทึกคอมเมนต์ลง DB
       const { data: insertedData, error: insertError } = await supabase
         .from("comments")
         .insert([
@@ -230,10 +232,9 @@ export default function PostCard({
         .select("id")
         .single();
 
-      if (insertError || !insertedData)
-        throw insertError || new Error("Insert empty");
+      if (insertError || !insertedData) throw insertError || new Error("Insert empty");
 
-      // 2. ดึงข้อมูลคอมเมนต์ที่บันทึกพร้อมข้อมูลผู้ใช้ (เพื่อแสดงผลทันที)
+      // ดึงข้อมูลคอมเมนต์ที่เพิ่งสร้างพร้อมข้อมูลผู้ใช้
       const { data: commentWithUser, error: fetchError } = await supabase
         .from("comments")
         .select("*, user:user_id(id, username, avatar_url)")
@@ -242,23 +243,24 @@ export default function PostCard({
 
       if (fetchError || !commentWithUser) throw fetchError;
 
-      // 3. อัปเดต State ของ comments และเคลียร์ช่องพิมพ์
+      // อัปเดต State
       setComments((prev) => [...prev, commentWithUser]);
-      setNewComment("");
+      setNewComment(""); // ล้างช่องพิมพ์
     } catch (err) {
       console.error("Error adding comment:", (err as Error).message);
       alert("เพิ่มคอมเมนต์ไม่สำเร็จ");
     }
   };
-  const handleToggleComments = () => setShowAllComments((prev) => !prev); // สลับแสดงคอมเมนต์ทั้งหมด
+  
+  const handleToggleComments = () => setShowAllComments((prev) => !prev);
 
-  // --- Logic: เริ่มการแก้ไขโพสต์ (Enter Edit Mode) ---
+  // เริ่มแก้ไขโพสต์
   const handleEdit = () => {
     setIsEditing(true);
     setEditedContent(post.content || "");
-    setIsMenuOpen(false); // ปิดเมนู
+    setIsMenuOpen(false);
 
-    // แปลง Full URL (Public URL) กลับเป็น Path ใน Storage เพื่อจัดการ
+    // แปลง URL กลับเป็น Path เพื่อจัดการไฟล์
     const currentPaths = post.media_urls
       .map((urlOrPath) => {
         if (
@@ -267,49 +269,48 @@ export default function PostCard({
         ) {
           try {
             const url = new URL(urlOrPath);
-            const pathSegment = `/post_media/`; // ชื่อ Bucket
-            // ดึง Path ส่วนที่อยู่หลังชื่อ Bucket
+            const pathSegment = `/post_media/`;
             const path = url.pathname.split(pathSegment)[1];
             return path;
           } catch (e) {
             return urlOrPath;
           }
         }
-        return urlOrPath; // ถ้าเป็น Path อยู่แล้ว
+        return urlOrPath;
       })
       .filter(Boolean) as string[];
 
-    setExistingMediaPaths(currentPaths); // กำหนด Path สื่อเดิม
+    setExistingMediaPaths(currentPaths);
     setSelectedFiles([]);
     setImagePreviews([]);
     setExistingMediaToDelete([]);
   };
 
-  // --- Logic: ยกเลิกการแก้ไข ---
+  // ยกเลิกแก้ไข
   const handleCancelEdit = () => {
     setIsEditing(false);
-    // เคลียร์ค่าที่เกี่ยวข้องกับการอัปโหลด/แก้ไขไฟล์
+    // ล้างค่าชั่วคราวทั้งหมด
     setSelectedFiles([]);
-    imagePreviews.forEach(URL.revokeObjectURL); // ปล่อย Object URL
+    imagePreviews.forEach(URL.revokeObjectURL);
     setImagePreviews([]);
     setExistingMediaPaths([]);
     setExistingMediaToDelete([]);
   };
 
-  // --- Logic: จัดการไฟล์ที่เลือกในโหมดแก้ไข ---
+  // จัดการไฟล์ในโหมดแก้ไข (เลือกเพิ่ม)
   const handleFileChange = (e: ChangeEvent<HTMLInputElement>) => {
     if (e.target.files) {
       const filesArray = Array.from(e.target.files);
-      setSelectedFiles((prev) => [...prev, ...filesArray]); // เพิ่มไฟล์ใหม่
+      setSelectedFiles((prev) => [...prev, ...filesArray]);
 
       const newPreviews = filesArray.map((file) => URL.createObjectURL(file));
-      setImagePreviews((prev) => [...prev, ...newPreviews]); // สร้าง Preview URL
+      setImagePreviews((prev) => [...prev, ...newPreviews]);
     }
   };
 
+  // ลบไฟล์ใหม่ที่เพิ่งเลือก
   const handleRemoveNewFile = (indexToRemove: number) => {
-    // ลบไฟล์ที่เลือกใหม่
-    URL.revokeObjectURL(imagePreviews[indexToRemove]); // ลบ Object URL ก่อน
+    URL.revokeObjectURL(imagePreviews[indexToRemove]);
     setSelectedFiles((prev) =>
       prev.filter((_, index) => index !== indexToRemove)
     );
@@ -318,43 +319,44 @@ export default function PostCard({
     );
   };
 
+  // ลบไฟล์เดิมที่มีอยู่แล้ว
   const handleRemoveExistingMedia = (pathToRemove: string) => {
-    // ทำเครื่องหมายไฟล์เดิมให้ถูกลบ
     setExistingMediaPaths((prev) =>
       prev.filter((path) => path !== pathToRemove)
     );
-    setExistingMediaToDelete((prev) => [...prev, pathToRemove]); // เก็บ Path ไว้ลบจาก Storage ภายหลัง
+    // เก็บ Path ไว้ลบออกจาก Storage จริงๆ ตอนกดบันทึก
+    setExistingMediaToDelete((prev) => [...prev, pathToRemove]);
   };
 
-  // --- Logic: บันทึกการแก้ไข (Save Edit) ---
+  // บันทึกการแก้ไข (Save Edit)
   const handleSaveEdit = async () => {
     setIsSaving(true);
     try {
-      let finalMediaUrls: string[] = [...existingMediaPaths]; // Path ที่เหลืออยู่
+      let finalMediaUrls: string[] = [...existingMediaPaths];
 
-      // 1. ลบไฟล์เก่าออกจาก Storage (ที่ถูกทำเครื่องหมายให้ลบ)
+      // 1. ลบไฟล์เก่าออกจาก Storage
       if (existingMediaToDelete.length > 0) {
         await supabase.storage
           .from("post_media")
           .remove(existingMediaToDelete);
       }
 
-      // 2. อัปโหลดไฟล์ใหม่ (ถ้ามี)
+      // 2. อัปโหลดไฟล์ใหม่
       if (selectedFiles.length > 0) {
         const uploadPromises = selectedFiles.map(async (file) => {
           const fileExt = file.name.split(".").pop();
           const uniqueName = `${crypto.randomUUID()}.${fileExt}`;
-          const filePath = `posts/${uniqueName}`; // Path ใน Storage
+          const filePath = `posts/${uniqueName}`;
 
           const { error } = await supabase.storage
             .from("post_media")
             .upload(filePath, file);
           if (error) throw error;
-          return filePath; // คืนค่า Path ที่ใช้บันทึก
+          return filePath;
         });
 
         const newUploadedPaths = await Promise.all(uploadPromises);
-        finalMediaUrls = [...finalMediaUrls, ...newUploadedPaths]; // รวม Path ใหม่เข้ากับ Path เดิมที่เหลืออยู่
+        finalMediaUrls = [...finalMediaUrls, ...newUploadedPaths];
       }
 
       // 3. อัปเดตข้อมูลใน Database
@@ -362,20 +364,18 @@ export default function PostCard({
         .from("posts")
         .update({
           content: editedContent.trim(),
-          media_urls: finalMediaUrls, // ใช้ Path ใหม่ทั้งหมด
+          media_urls: finalMediaUrls,
         })
         .eq("id", post.id)
         .select(
-          // ดึงข้อมูลใหม่ทั้งหมดกลับมาเพื่ออัปเดต UI (รวมถึง likes/comments)
           "*, user:user_id(id, username, avatar_url, created_at), likes(user_id), comments(*, user:user_id(id, username, avatar_url))"
         )
         .single();
 
       if (error) throw error;
 
-      // 4. อัปเดต State ผ่าน Callback ไปยัง Parent Component
+      // 4. แจ้ง Component แม่ว่าอัปเดตแล้ว
       if (onPostUpdated && data) {
-        // แปลงข้อมูลที่ได้จากการ SELECT กลับมาให้ตรงกับ Type
         const updatedPostWithCounts: PostWithUser = {
           ...data,
           likes_count: data.likes?.length || 0,
@@ -388,13 +388,13 @@ export default function PostCard({
         };
         onPostUpdated(updatedPostWithCounts);
       }
-      setIsEditing(false); // ออกจากโหมดแก้ไข
+      setIsEditing(false);
     } catch (err) {
       console.error("Error updating post:", (err as Error).message);
       alert("ไม่สามารถแก้ไขโพสต์ได้: " + (err as Error).message);
     } finally {
       setIsSaving(false);
-      // เคลียร์ State ชั่วคราวทั้งหมด
+      // ล้างค่าชั่วคราว
       setSelectedFiles([]);
       imagePreviews.forEach(URL.revokeObjectURL);
       setImagePreviews([]);
@@ -403,16 +403,16 @@ export default function PostCard({
     }
   };
 
-  // --- Logic: ลบโพสต์ (Delete) ---
+  // ลบโพสต์ (Delete)
   const handleDelete = async () => {
     setIsMenuOpen(false);
-    if (!window.confirm("คุณต้องการลบโพสต์นี้จริงหรือไม่?")) return; // ยืนยันก่อนลบ
+    if (!window.confirm("คุณต้องการลบโพสต์นี้จริงหรือไม่?")) return;
 
     try {
       const pathsToDelete: string[] = [];
       const bucketName = "post_media";
 
-      // 1. แปลง Public URL กลับเป็น Path ใน Storage (เพื่อลบไฟล์)
+      // เตรียมรายการไฟล์ที่ต้องลบจาก Storage
       for (const urlOrPath of post.media_urls) {
         if (
           urlOrPath.startsWith("http://") ||
@@ -430,12 +430,12 @@ export default function PostCard({
         }
       }
 
-      // 2. ลบไฟล์จาก Storage (ถ้ามี)
+      // 1. ลบไฟล์จาก Storage
       if (pathsToDelete.length > 0) {
         await supabase.storage.from(bucketName).remove(pathsToDelete);
       }
 
-      // 3. ลบข้อมูลจาก Database (การลบโพสต์จะทำให้ Likes/Comments ถูกลบตามไปด้วยถ้าตั้ง Foreign Key Cascading)
+      // 2. ลบข้อมูลจาก Database
       const { error: dbError } = await supabase
         .from("posts")
         .delete()
@@ -443,7 +443,7 @@ export default function PostCard({
 
       if (dbError) throw dbError;
 
-      // 4. แจ้ง Parent Component ว่าลบสำเร็จ
+      // 3. แจ้ง Component แม่
       if (onPostDeleted) {
         onPostDeleted(post.id);
       }
@@ -453,18 +453,17 @@ export default function PostCard({
     }
   };
 
-  // ----------------------------------------------------------------------
-  // --- JSX (Return Statement) ---
-  // ----------------------------------------------------------------------
+  // --- 5. ส่วนแสดงผลหน้าจอ (JSX) ---
   return (
     <div className="relative bg-white p-4 rounded-2xl shadow mb-2 border border-gray-200">
-      {/* 1. Modal แสดงรูปภาพ (Rendered Conditionally) */}
+      
+      {/* 1. Modal แสดงรูปภาพ (ถ้ามีเลือกอยู่) */}
       <MediaModal
         mediaUrl={selectedMediaUrl as string}
         onClose={handleCloseModal}
       />
 
-      {/* 2. เมนูตัวเลือก (Edit/Delete) - แสดงเฉพาะเจ้าของโพสต์และเมื่อไม่อยู่ในโหมดแก้ไข */}
+      {/* 2. เมนูตัวเลือก (จุดสามจุด) - แสดงเฉพาะเจ้าของโพสต์/กลุ่ม */}
       {(userId === post.user_id || userId === groupOwnerId) && !isEditing && (
         <div ref={menuRef} className="absolute top-4 right-4 z-10">
           <button
@@ -495,13 +494,13 @@ export default function PostCard({
           {isMenuOpen && (
             <div className="absolute top-full right-0 mt-1 bg-white border border-gray-200 rounded-lg shadow-lg min-w-[140px]">
               {userId === post.user_id && (
-              <button
-                type="button"
-                onClick={handleEdit}
-                className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded-t-lg"
-              >
-                ✏️ แก้ไขโพสต์
-              </button>
+                <button
+                  type="button"
+                  onClick={handleEdit}
+                  className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded-t-lg"
+                >
+                  ✏️ แก้ไขโพสต์
+                </button>
               )}
               <button
                 type="button"
@@ -515,10 +514,9 @@ export default function PostCard({
         </div>
       )}
 
-      {/* 3. ส่วนหัว: ข้อมูลผู้โพสต์ (User Post Header) */}
+      {/* 3. ส่วนหัวโพสต์ (Avatar & Name) */}
       <div className="flex items-center gap-3 mb-2">
         <div className="w-10 h-10 rounded-full overflow-hidden bg-gray-200 flex items-center justify-center">
-          {/* แสดง Avatar ของผู้โพสต์/กลุ่ม */}
           {headerAvatarUrl &&
           headerAvatarUrl !== "https://via.placeholder.com/24" ? (
             <Image
@@ -534,9 +532,7 @@ export default function PostCard({
           )}
         </div>
         <div className="flex flex-col">
-          {/* ชื่อผู้ใช้/ชื่อกลุ่ม */}
           <span className="font-semibold">{headerUsername}</span>
-          {/* วันที่และเวลาโพสต์ */}
           <span className="text-xs text-gray-500">
             {new Date(post.created_at).toLocaleDateString("th-TH", {
               year: "numeric",
@@ -549,22 +545,22 @@ export default function PostCard({
         </div>
       </div>
 
-      {/* 4. ส่วนเนื้อหาโพสต์ (Content & Media) */}
+      {/* 4. เนื้อหาโพสต์ (Content) */}
       {!isEditing ? (
-        // --- โหมดแสดงผล (View Mode) ---
+        // --- โหมดแสดงผลปกติ (View) ---
         <>
-          {/* เนื้อหาข้อความ */}
+          {/* ข้อความ */}
           {post.content && (
             <p className="mb-2 whitespace-pre-wrap break-words">
               {post.content}
             </p>
           )}
 
-          {/* Grid แสดงรูปภาพ/วิดีโอ */}
+          {/* รูปภาพ/วิดีโอ */}
           {mediaUrls.length > 0 && (
             <div className="flex flex-wrap gap-2 mb-2">
               {mediaToShow.map((url, i) => {
-                // Logic สำหรับการจำกัดจำนวนการแสดงผล
+                // คำนวณการแสดง Overlay (+N)
                 const isLastLimitedItem =
                   !showAllMedia &&
                   i === MEDIA_LIMIT - 1 &&
@@ -572,8 +568,8 @@ export default function PostCard({
                 const isSingleMedia = mediaUrls.length === 1 && !showAllMedia;
 
                 const mediaContainerClass = isSingleMedia
-                  ? "relative w-full h-auto min-h-48 rounded-xl overflow-hidden cursor-pointer" // รูปเดียวขนาดใหญ่
-                  : "relative w-32 h-32 rounded-xl overflow-hidden cursor-pointer bg-gray-100"; // หลายรูปขนาดเล็ก
+                  ? "relative w-full h-auto min-h-48 rounded-xl overflow-hidden cursor-pointer"
+                  : "relative w-32 h-32 rounded-xl overflow-hidden cursor-pointer bg-gray-100";
 
                 return (
                   <div
@@ -582,7 +578,6 @@ export default function PostCard({
                     onClick={() => handleMediaClick(url)}
                   >
                     {url.endsWith(".mp4") ? (
-                      // แสดงวิดีโอ (ในโหมดพรีวิว)
                       <video
                         src={url}
                         controls={false}
@@ -591,24 +586,23 @@ export default function PostCard({
                         }`}
                       />
                     ) : (
-                      // แสดงรูปภาพ (ในโหมดพรีวิว)
                       <Image
                         src={url}
                         fill
                         sizes={isSingleMedia ? "100vw" : "128px"}
-                        className="object-contain" // แสดงทั้งรูป ไม่ถูกตัด
+                        className="object-contain"
                         unoptimized
                         alt={""}
                       />
                     )}
 
-                    {/* Overlay แสดงจำนวนรูปที่เหลือ (+N) */}
+                    {/* Overlay แสดงจำนวนรูปที่เหลือ */}
                     {isLastLimitedItem && (
                       <button
                         type="button"
                         onClick={(e) => {
-                          e.stopPropagation(); // ป้องกันการเปิด Modal
-                          handleToggleMedia(); // สลับไปแสดงทั้งหมด
+                          e.stopPropagation();
+                          handleToggleMedia();
                         }}
                         className="absolute inset-0 bg-black bg-opacity-50 text-white font-bold text-lg flex items-center justify-center hover:bg-opacity-70 transition"
                       >
@@ -621,7 +615,7 @@ export default function PostCard({
             </div>
           )}
 
-          {/* ปุ่มซ่อนรูปภาพ (แสดงเมื่อ ShowAllMedia เป็น true และมีรูปเกินขีดจำกัด) */}
+          {/* ปุ่มซ่อนรูป (ถ้าแสดงครบแล้ว) */}
           {showAllMedia && mediaUrls.length > MEDIA_LIMIT && (
             <button
               type="button"
@@ -633,9 +627,9 @@ export default function PostCard({
           )}
         </>
       ) : (
-        // --- โหมดแก้ไข (Edit Mode) ---
+        // --- โหมดแก้ไข (Edit) ---
         <div className="mb-2">
-          {/* ช่องแก้ไขข้อความ */}
+          {/* แก้ไขข้อความ */}
           <textarea
             value={editedContent}
             onChange={(e) => setEditedContent(e.target.value)}
@@ -645,14 +639,13 @@ export default function PostCard({
             autoFocus
           />
 
-          {/* รายการรูปภาพเดิม (พร้อมปุ่มลบ) */}
+          {/* จัดการรูปเดิม */}
           <div className="flex flex-wrap gap-2 my-2">
             {existingMediaPaths.map((path, i) => (
               <div
                 key={`existing-${path}-${i}`}
                 className="relative w-24 h-24 rounded-lg overflow-hidden border border-gray-300"
               >
-                {/* แสดงรูปภาพ/วิดีโอเดิม */}
                 {path.endsWith(".mp4") ? (
                   <video
                     src={getPublicMediaUrl(path)}
@@ -668,7 +661,7 @@ export default function PostCard({
                     unoptimized
                   />
                 )}
-                {/* ปุ่มลบรูปภาพเดิม */}
+                {/* ปุ่มลบรูปเดิม */}
                 <button
                   type="button"
                   onClick={() => handleRemoveExistingMedia(path)}
@@ -682,7 +675,7 @@ export default function PostCard({
             ))}
           </div>
 
-          {/* ปุ่มเพิ่มรูปภาพใหม่ */}
+          {/* ปุ่มเพิ่มรูปใหม่ */}
           <div className="mt-4">
             <label
               htmlFor={`media-upload-edit-${post.id}`}
@@ -701,7 +694,7 @@ export default function PostCard({
             />
           </div>
 
-          {/* พรีวิวรูปภาพใหม่ที่เลือก */}
+          {/* พรีวิวรูปใหม่ */}
           {imagePreviews.length > 0 && (
             <div className="flex flex-wrap gap-2 mt-2">
               {imagePreviews.map((previewUrl, i) => (
@@ -717,7 +710,6 @@ export default function PostCard({
                     className="object-cover"
                     unoptimized
                   />
-                  {/* ปุ่มลบรูปภาพที่เลือกใหม่ */}
                   <button
                     type="button"
                     onClick={() => handleRemoveNewFile(i)}
@@ -754,11 +746,11 @@ export default function PostCard({
         </div>
       )}
 
-      {/* 5. ส่วน Footer (Likes & Comments) - ซ่อนเมื่อกำลังแก้ไข */}
+      {/* 5. ส่วน Footer (Likes & Comments) */}
       {!isEditing && (
         <>
-          {/* แถบ Like/Comment Count */}
           <div className="flex gap-4 text-gray-500 text-sm pt-3 mt-4 border-t border-gray-100">
+            {/* ปุ่มกด Like */}
             <button
               type="button"
               onClick={handleLikeToggle}
@@ -768,20 +760,20 @@ export default function PostCard({
             >
               <Heart className="w-4 h-4 fill-current" /> {likesCount} ถูกใจ
             </button>
+            
+            {/* แสดงจำนวนคอมเมนต์ */}
             <span className="flex items-center gap-1.5">
               <MessageSquare className="w-4 h-4" />
               {comments.length} ความคิดเห็น
             </span>
           </div>
 
-          {/* แสดงรายการคอมเมนต์ */}
+          {/* รายการคอมเมนต์ */}
           {comments.length > 0 && (
             <div className="mt-2 space-y-1">
               {comments
-                // จำกัดจำนวนคอมเมนต์ที่แสดงตาม State
                 .slice(0, showAllComments ? comments.length : COMMENTS_LIMIT)
                 .map((c) => {
-                  // Logic: ถ้าเจ้าของกลุ่มมาเม้นต์ ให้ใช้รูปและชื่อกลุ่ม
                   const isOwnerCommenting = c.user?.id === groupOwnerId;
                   const avatarToShow = isOwnerCommenting
                     ? groupAvatar
@@ -813,7 +805,7 @@ export default function PostCard({
                   );
                 })}
 
-              {/* ปุ่มดูเพิ่มเติม/ซ่อน */}
+              {/* ปุ่มดูคอมเมนต์เพิ่มเติม */}
               {comments.length > COMMENTS_LIMIT && (
                 <button
                   type="button"
@@ -836,7 +828,6 @@ export default function PostCard({
               <input
                 type="text"
                 value={newComment}
-                // กด Enter เพื่อส่งคอมเมนต์
                 onKeyDown={(e) => {
                   if (e.key === "Enter") {
                     e.preventDefault();

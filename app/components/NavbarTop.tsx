@@ -1,50 +1,55 @@
-"use client";
+"use client"; // แจ้ง Next.js ว่าไฟล์นี้ทำงานที่ฝั่ง Browser (Client Side)
 
 import Link from "next/link";
 import Image from "next/image";
 import { useEffect, useState, useRef } from "react";
-// ใช้ Supabase client จริง
-import { supabase } from "@/lib/supabase/client";
-// นำเข้า Icon สำหรับ Placeholder
-import { User as UserIcon } from "lucide-react";
-// นำเข้า Hook สำหรับตรวจสอบทิศทางการเลื่อน
-import { useScrollDirection } from "@/lib/hooks/useScrollDirection";
+import { supabase } from "@/lib/supabase/client"; // เครื่องมือเชื่อมต่อฐานข้อมูล Supabase
+import { User as UserIcon } from "lucide-react"; // ไอคอนรูปคน
+import { useScrollDirection } from "@/lib/hooks/useScrollDirection"; // Hook ตรวจสอบการเลื่อนหน้าจอ
 
-// --- กำหนดโครงสร้างข้อมูล (Types) ---
+// ====================================================================
+// ส่วนกำหนดรูปแบบข้อมูล (Interface)
+// ====================================================================
+
+// โครงสร้างข้อมูลกลุ่ม (สำหรับผลการค้นหา)
 interface Group {
   id: string;
   name: string;
 }
 
-// --- Component หลัก: แถบนำทางด้านบน ---
+// ====================================================================
+// Component หลัก: แถบนำทางด้านบน (NavbarTop)
+// ====================================================================
+
 export const NavbarTop = () => {
-  // --- ส่วนจัดการ State ---
-  const [avatar, setAvatar] = useState<string | null>(null); // เก็บ URL รูปโปรไฟล์
-  const [searchTerm, setSearchTerm] = useState(""); // เก็บคำค้นหา
-  const [groupResults, setGroupResults] = useState<Group[]>([]); // เก็บผลลัพธ์การค้นหากลุ่ม
   
-  // ใช้ Hook เพื่อตรวจสอบทิศทางการเลื่อน
+  // --- 1. การจัดการข้อมูล (State) ---
+  const [avatar, setAvatar] = useState<string | null>(null);     // เก็บ URL รูปโปรไฟล์
+  const [searchTerm, setSearchTerm] = useState("");              // เก็บคำค้นหาที่พิมพ์
+  const [groupResults, setGroupResults] = useState<Group[]>([]); // เก็บรายการกลุ่มที่ค้นเจอ
+
+  // ตรวจสอบทิศทางการเลื่อนหน้าจอ (เพื่อซ่อน/แสดง Navbar)
   const isScrollingUp = useScrollDirection();
   
-  // ใช้ Ref อ้างอิงถึงกล่องค้นหา เพื่อตรวจสอบการคลิกภายนอก
+  // ตัวอ้างอิงตำแหน่งกล่องค้นหา (ใช้ตรวจสอบการคลิกพื้นที่อื่นเพื่อปิดผลการค้นหา)
   const searchRef = useRef<HTMLDivElement>(null);
 
-  // --- Effect: ดึงรูปโปรไฟล์ของผู้ใช้ปัจจุบัน (ทำครั้งเดียวเมื่อโหลด) ---
+  // --- 2. โหลดรูปโปรไฟล์เมื่อเริ่มใช้งาน (Effect) ---
   useEffect(() => {
     const fetchAvatar = async () => {
-      // 1. หา User ID ปัจจุบัน
+      // ดึงข้อมูล User ปัจจุบัน
       const { data: { session } } = await supabase.auth.getSession();
       const userId = session?.user?.id;
       if (!userId) return;
 
-      // 2. ดึงข้อมูล avatar_url จากตาราง user
+      // ค้นหา avatar_url จากฐานข้อมูล
       const { data: profile } = await supabase
         .from("user")
         .select("avatar_url")
         .eq("id", userId)
         .single();
 
-      // 3. แปลง Path เป็น Public URL และตั้งค่า State
+      // ถ้ามีรูป ให้แปลง Path เป็น URL ที่ใช้งานได้จริง
       if (profile?.avatar_url) {
         const { data } = supabase.storage.from("avatars").getPublicUrl(profile.avatar_url);
         setAvatar(data.publicUrl);
@@ -54,46 +59,47 @@ export const NavbarTop = () => {
     fetchAvatar();
   }, []);
 
-  // --- Effect: ซ่อนผลการค้นหาเมื่อคลิกพื้นที่ภายนอก (Click Outside Logic) ---
+  // --- 3. ปิดผลการค้นหาเมื่อคลิกที่อื่น (Effect) ---
   useEffect(() => {
     const handler = (e: MouseEvent) => {
-      // ถ้าคลิกนอกพื้นที่ searchRef และ searchRef มีอยู่
+      // ถ้าคลิกนอกพื้นที่ของกล่องค้นหา (searchRef)
       if (searchRef.current && !searchRef.current.contains(e.target as Node)) {
-        setGroupResults([]); // เคลียร์ผลลัพธ์การค้นหา
+        setGroupResults([]); // ปิดผลการค้นหา
       }
     };
+    
     document.addEventListener("mousedown", handler);
-    return () => document.removeEventListener("mousedown", handler); // Cleanup
+    return () => document.removeEventListener("mousedown", handler); // ล้าง Event เมื่อเลิกใช้
   }, []);
 
-  // --- Effect: ค้นหากลุ่มเมื่อพิมพ์ (Search Logic) ---
+  // --- 4. ระบบค้นหาแบบ Real-time (Effect) ---
   useEffect(() => {
-    // ใช้ debounce หรือ throttle เพื่อลดจำนวน API call ใน Production
     const fetchGroups = async () => {
-      // ถ้าไม่มีคำค้นหา ให้เคลียร์ผลลัพธ์
+      // ถ้าช่องค้นหาว่างเปล่า ให้เคลียร์ผลลัพธ์
       if (!searchTerm.trim()) {
         setGroupResults([]);
         return;
       }
 
-      // ค้นหาชื่อกลุ่มที่ใกล้เคียง (Case-insensitive: ilike)
+      // ค้นหาชื่อกลุ่มจาก Supabase (ilike = ไม่สนตัวพิมพ์เล็กใหญ่)
       const { data } = await supabase
         .from("groups")
         .select("id, name")
         .ilike("name", `%${searchTerm}%`)
-        .limit(5); // จำกัดผลลัพธ์ไม่เกิน 5 รายการ
+        .limit(5); // เอาแค่ 5 อันดับแรก
 
       setGroupResults((data as Group[]) || []);
     };
 
-    // หน่วงเวลาเล็กน้อยเพื่อให้พิมพ์จบก่อนค้นหา (Optional: สามารถใช้ Debounce ได้)
+    // ตั้งเวลาหน่วง 0.3 วินาที (Debounce) เพื่อไม่ให้ยิง Request ถี่เกินไปตอนพิมพ์
     const delay = setTimeout(fetchGroups, 300);
-    return () => clearTimeout(delay); // Cleanup
+    return () => clearTimeout(delay); // ยกเลิกตัวตั้งเวลาถ้ามีการพิมพ์เพิ่มก่อนครบเวลา
 
   }, [searchTerm]); // ทำงานทุกครั้งที่ searchTerm เปลี่ยน
 
+  // --- 5. ส่วนแสดงผลหน้าจอ (Render UI) ---
   return (
-    // --- ส่วนแสดงผล (UI) ---
+    // Navbar หลัก: ติดด้านบน (fixed), ซ่อนเมื่อเลื่อนลง (-translate-y-full)
     <nav className={`
       flex justify-between items-center bg-gray-900 px-4 sm:px-8 py-2 gap-4 
       fixed top-0 left-0 w-full z-50 h-20 shadow-lg
@@ -101,22 +107,23 @@ export const NavbarTop = () => {
       ${isScrollingUp ? "translate-y-0" : "-translate-y-full"}
     `}>
       
-      {/* ส่วนซ้าย: โลโก้เว็บไซต์ */}
+      {/* ส่วนซ้าย: โลโก้ */}
       <div className="flex-1 flex items-center">
-        {/* โลโก้แบบตัวอักษร (Desktop) */}
+        {/* โลโก้ข้อความ (สำหรับจอใหญ่) */}
         <Link
           href="/dashboard"
           className="sm:flex hidden"
         >
-          <span className="text-3xl font-bold text-blue-400 hover:text-white transition-colors">Proximity Link</span>
+          <span className="text-3xl font-bold text-blue-400 hover:text-white transition-colors">
+            Proximity Link
+          </span>
         </Link>
-        {/* โลโก้แบบไอคอน (Mobile) */}
+        {/* โลโก้ไอคอน (สำหรับมือถือ) */}
         <Link
           href="/dashboard"
           className="sm:hidden flex items-center text-blue-400"
           aria-label="Home"
         >
-          {/* SVG Icon (รูปบ้าน) */}
           <svg className="w-6 h-6" viewBox="0 0 24 24">
             <path
               stroke="currentColor"
@@ -128,12 +135,13 @@ export const NavbarTop = () => {
         </Link>
       </div>
 
-      {/* ส่วนกลาง: ว่าง */}
+      {/* ส่วนกลาง: เว้นว่างไว้ */}
       <div className="flex-1"></div>
 
-      {/* ส่วนขวา: ช่องค้นหาและรูปโปรไฟล์ */}
+      {/* ส่วนขวา: ค้นหา และ โปรไฟล์ */}
       <div className="flex items-center gap-4">
-        {/* ช่องค้นหา */}
+        
+        {/* กล่องค้นหา */}
         <div ref={searchRef} className="relative w-64">
           <input
             type="text"
@@ -143,17 +151,20 @@ export const NavbarTop = () => {
             className="w-full px-4 py-2 rounded-full bg-white shadow-md text-gray-700 text-sm focus:ring-2 focus:ring-blue-400 focus:ring-offset-2 focus:ring-offset-gray-900 outline-none transition-all"
           />
           
-          {/* Dropdown แสดงผลลัพธ์การค้นหา */}
+          {/* รายการผลลัพธ์การค้นหา (Dropdown) */}
           {groupResults.length > 0 && (
             <ul className="absolute top-full left-0 mt-2 w-full bg-white border border-gray-200 rounded-lg shadow-lg z-50">
               {groupResults.map((g, index) => (
-                <li key={g.id} className={`hover:bg-blue-50 transition-colors ${index === 0 ? 'rounded-t-lg' : ''} ${index === groupResults.length - 1 ? 'rounded-b-lg' : ''}`}>
+                <li 
+                  key={g.id} 
+                  className={`hover:bg-blue-50 transition-colors ${index === 0 ? 'rounded-t-lg' : ''} ${index === groupResults.length - 1 ? 'rounded-b-lg' : ''}`}
+                >
                   <Link
                     href={`/groups/${g.id}`}
                     className="block px-4 py-2.5 text-gray-700 hover:text-blue-600 text-sm"
                     onClick={() => {
-                      setGroupResults([]); // เคลียร์ผลลัพธ์หลังคลิก
-                      setSearchTerm(""); // เคลียร์คำค้นหา
+                      setGroupResults([]); // ปิดผลการค้นหาเมื่อเลือก
+                      setSearchTerm("");   // ล้างคำค้นหา
                     }}
                   >
                     {g.name}
@@ -164,11 +175,11 @@ export const NavbarTop = () => {
           )}
         </div>
 
-        {/* รูปโปรไฟล์ */}
+        {/* รูปโปรไฟล์ (ลิงก์ไปหน้า Profile) */}
         <Link href="/profile">
           <div className="w-10 h-10 rounded-full overflow-hidden ring-2 ring-yellow-400 bg-gray-100 flex items-center justify-center">
             {avatar ? (
-              // แสดงรูปโปรไฟล์ที่ดึงมา
+              // ถ้ามีรูป ให้แสดงรูป
               <Image
                 src={avatar}
                 alt="avatar"
@@ -178,7 +189,7 @@ export const NavbarTop = () => {
                 unoptimized
               />
             ) : (
-              // Placeholder Icon
+              // ถ้าไม่มี ให้แสดงไอคอนคน
               <UserIcon className="w-6 h-6 text-gray-400" />
             )}
           </div>
