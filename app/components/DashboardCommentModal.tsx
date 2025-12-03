@@ -119,58 +119,59 @@ export default function DashboardCommentModal({
 
   return (
     // --- UI: กล่อง Modal (Container) ---
-    <div className="bg-white rounded-xl w-full max-w-lg shadow-2xl flex flex-col max-h-[90vh]">
+    <div className="bg-white rounded-2xl w-full max-w-md sm:max-w-lg shadow-2xl flex flex-col max-h-[90vh] mx-2 sm:mx-0">
       
       {/* ส่วนหัว: ชื่อและปุ่มปิด */}
-      <div className="p-4 border-b flex justify-between items-center shrink-0">
-        <h3 className="text-lg font-bold">
-          ความคิดเห็นทั้งหมด ({comments.length})
+      <div className="p-4 sm:p-5 border-b border-gray-200 flex justify-between items-center shrink-0 bg-gradient-to-r from-sky-50 to-blue-50 rounded-t-2xl">
+        <h3 className="text-base sm:text-lg font-bold text-gray-800">
+          💬 ความคิดเห็นทั้งหมด ({comments.length})
         </h3>
         <button
           onClick={onClose}
           type="button"
           aria-label="ปิดหน้าต่าง"
-          className="text-gray-500 hover:text-gray-900 font-bold text-2xl leading-none"
+          className="text-gray-400 hover:text-gray-700 p-1 hover:bg-white rounded-lg transition-colors"
         >
-          <X className="w-6 h-6 cursor-pointer" />
+          <X className="w-5 h-5 sm:w-6 sm:h-6 cursor-pointer" />
         </button>
       </div>
 
       {/* ส่วนรายการคอมเมนต์ (Scrollable Body) */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-3">
+      <div className="flex-1 overflow-y-auto p-3 sm:p-4 space-y-3 bg-white">
         {isLoading ? (
           // สถานะกำลังโหลด
-          <div className="p-4 text-center">
-            <Loader2 className="w-6 h-6 animate-spin mx-auto text-sky-500" />
+          <div className="p-6 sm:p-8 text-center">
+            <Loader2 className="w-6 h-6 sm:w-8 sm:h-8 animate-spin mx-auto text-sky-500" />
+            <p className="text-gray-500 text-sm mt-2">กำลังโหลด...</p>
           </div>
         ) : comments.length === 0 ? (
           // กรณีไม่มีคอมเมนต์
-          <p className="text-center text-gray-500 py-10">
-            ยังไม่มีใครแสดงความคิดเห็น
-          </p>
+          <div className="text-center py-8 sm:py-12">
+            <p className="text-gray-400 text-sm">📝 ยังไม่มีใครแสดงความคิดเห็น</p>
+          </div>
         ) : (
           // แสดงรายการคอมเมนต์ทั้งหมด
           comments.map((c) => (
-            <div key={c.id} className="flex items-start gap-2">
+            <div key={c.id} className="flex items-start gap-2 sm:gap-3 hover:bg-gray-50 p-2 sm:p-3 rounded-lg transition-colors">
               {/* รูปโปรไฟล์ */}
-              <div className="w-8 h-8 rounded-full overflow-hidden bg-gray-100 shrink-0">
+              <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-full overflow-hidden bg-gradient-to-br from-sky-400 to-blue-500 shrink-0 border border-gray-200">
                 <Image
                   src={getAvatarPublicUrl(c.user?.avatar_url)}
                   alt={c.user?.username || "User"}
-                  width={32}
-                  height={32}
+                  width={36}
+                  height={36}
                   className="object-cover"
                   unoptimized
                 />
               </div>
               {/* กล่องข้อความคอมเมนต์ */}
-              <div className="flex-1 bg-gray-100 px-3 py-2 rounded-xl text-sm break-words">
-                <span className="font-semibold">
+              <div className="flex-1 bg-gray-50 px-3 sm:px-4 py-2 sm:py-2.5 rounded-lg text-sm break-words border border-gray-100 hover:border-gray-200 transition-colors">
+                <span className="font-semibold text-gray-800 text-sm">
                   {c.user?.username || "Unnamed User"}
                 </span>
-                <p className="text-gray-800 mt-0.5">{c.content}</p>
+                <p className="text-gray-700 mt-1 text-sm leading-relaxed">{c.content}</p>
                 {/* วันที่และเวลาของคอมเมนต์ */}
-                <p className="text-xs text-gray-400 mt-1">
+                <p className="text-xs text-gray-400 mt-1.5">
                   {new Date(c.created_at).toLocaleString()}
                 </p>
               </div>
@@ -182,29 +183,29 @@ export default function DashboardCommentModal({
       {/* ส่วนฟอร์มส่งคอมเมนต์ (Footer) */}
       <form
         onSubmit={handleCommentSubmit}
-        className="p-4 border-t bg-gray-50 flex gap-2 shrink-0"
+        className="p-3 sm:p-4 border-t border-gray-200 bg-gradient-to-r from-gray-50 to-blue-50 flex gap-2 shrink-0 rounded-b-2xl"
       >
         <input
           type="text"
           value={commentText}
           onChange={(e) => setCommentText(e.target.value)}
           placeholder="เพิ่มความคิดเห็น..."
-          className="flex-1 px-4 py-2 rounded-full border border-gray-300 focus:ring-sky-500 focus:border-sky-500 outline-none"
+          className="flex-1 px-3 sm:px-4 py-2 text-sm rounded-full border border-gray-300 focus:ring-2 focus:ring-sky-400 focus:border-sky-400 outline-none transition-all"
           disabled={isSubmitting}
         />
         <button
           type="submit"
           // ปุ่ม Disabled ถ้าไม่มีข้อความ หรือกำลัง Submit
           disabled={!commentText.trim() || isSubmitting}
-          className="bg-sky-600 text-white px-5 py-2 rounded-full font-semibold disabled:opacity-50 transition-all flex items-center gap-1 cursor-pointer active:scale-95 hover:bg-sky-700 "
+          className="bg-sky-600 text-white px-4 sm:px-5 py-2 text-sm rounded-full font-semibold disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center gap-1 cursor-pointer active:scale-95 hover:bg-sky-700 shadow-sm hover:shadow-md"
         >
           {/* แสดง Icon Loader หรือ Send ตามสถานะ */}
           {isSubmitting ? (
-            <Loader2 className="w-5 h-5 animate-spin" />
+            <Loader2 className="w-4 h-4 sm:w-5 sm:h-5 animate-spin" />
           ) : (
-            <Send className="w-5 h-5" />
+            <Send className="w-4 h-4 sm:w-5 sm:h-5" />
           )}
-          <span>ส่ง</span>
+          <span className="hidden sm:inline">ส่ง</span>
         </button>
       </form>
     </div>

@@ -54,7 +54,7 @@ export default function Page() {
       <header className="w-full p-6 flex items-center shrink-0 z-20">
         {/* โลโก้/ชื่อเว็บไซต์ */}
         <div className="text-2xl sm:text-3xl font-bold text-blue-900 tracking-tight">
-          OUR ZONE
+          Proximity Link
         </div>
       </header>
 
