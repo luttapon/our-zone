@@ -4,6 +4,75 @@ import React, { useState, FormEvent } from "react";
 import { useRouter } from "next/navigation";
 // ใช้ Supabase client จริง
 import { supabase } from "@/lib/supabase/client"; 
+// นำเข้า Icon ที่จำเป็น รวมถึง Eye และ EyeOff สำหรับการซ่อน/แสดงรหัสผ่าน
+import { Lock, LucideIcon, Eye, EyeOff } from "lucide-react"; 
+
+// --- InputField Component - ส่วนประกอบ Input ที่มี Icon และรองรับการสลับรหัสผ่าน ---
+interface InputFieldProps {
+  icon: LucideIcon;
+  type: string;
+  value: string;
+  onChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
+  placeholder: string;
+  required?: boolean;
+  id: string;
+}
+
+// InputField Component (ใช้ซ้ำได้สำหรับ Email, Username, Password)
+const InputField = ({
+  icon: Icon,
+  type,
+  value,
+  onChange,
+  placeholder,
+  required = true,
+  id,
+}: InputFieldProps) => {
+  // 1. ตรวจสอบว่า Input นั้นเป็นประเภท 'password' หรือไม่
+  const isPasswordField = type === "password";
+  // 2. State สำหรับจัดการการมองเห็นรหัสผ่าน (เริ่มต้น: ซ่อน)
+  const [isPasswordVisible, setIsPasswordVisible] = useState(false);
+
+  // 3. กำหนดประเภท Input ที่แท้จริงที่จะใช้ใน DOM (text หรือ password)
+  const inputType = isPasswordField
+    ? isPasswordVisible // ถ้าเป็น Password Field:
+      ? "text" // ...และผู้ใช้ต้องการเห็นรหัสผ่าน, ให้ใช้ type="text"
+      : "password" // ...ถ้าไม่, ให้ใช้ type="password" (ซ่อน)
+    : type; // ถ้าไม่ใช่ Password Field ให้ใช้ type ตามที่ถูกส่งมา
+
+  // 4. Icon สำหรับปุ่มสลับ (เลือก EyeOff ถ้ากำลังแสดงอยู่ และ Eye ถ้าซ่อนอยู่)
+  const VisibilityIcon = isPasswordVisible ? EyeOff : Eye;
+
+  return (
+    <div className="relative">
+      {/* ไอคอนด้านซ้ายของ input */}
+      <Icon className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 sm:h-5 sm:w-5 text-gray-500" />
+      <input
+        // ใช้ inputType ที่คำนวณแล้ว (รองรับการสลับระหว่าง text/password)
+        type={inputType}
+        value={value}
+        onChange={onChange}
+        placeholder={placeholder}
+        required={required}
+        id={id}
+        // ปรับ padding ด้านขวาสำหรับปุ่มตาเปิดปิด (pr-10 / sm:pr-12)
+        className="w-full pl-9 sm:pl-10 pr-10 sm:pr-12 py-2.5 sm:py-3 border border-gray-300 bg-white/80 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition duration-200 ease-in-out placeholder-gray-400 text-sm sm:text-base shadow-sm hover:border-gray-400"
+      />
+
+      {/* 5. ปุ่มสลับการมองเห็น (แสดงเฉพาะ Password Field เท่านั้น) */}
+      {isPasswordField && (
+        <button
+          type="button"
+          onClick={() => setIsPasswordVisible(!isPasswordVisible)}
+          className="absolute right-3 top-1/2 -translate-y-1/2 p-1 text-gray-500 hover:text-gray-700 transition duration-150 focus:outline-none"
+          aria-label={isPasswordVisible ? "ซ่อนรหัสผ่าน" : "แสดงรหัสผ่าน"}
+        >
+          <VisibilityIcon className="h-4 w-4 sm:h-5 sm:w-5" />
+        </button>
+      )}
+    </div>
+  );
+};
 
 // --- กำหนดโครงสร้างข้อมูลสำหรับข้อความแจ้งเตือน ---
 interface MessageState {
@@ -84,10 +153,6 @@ const App: React.FC = () => {
       ? "bg-green-100 text-green-700"
       : "bg-red-100 text-red-700";
 
-  // ตัวแปรสำหรับรูปภาพพื้นหลัง (ใช้ตามโค้ดเดิม)
-  // const imagePathFromPublic = "/wallpaper4.jpg"; // ไม่ได้ใช้ใน JSX
-  // const backgroundImageSource = imagePathFromPublic; // ไม่ได้ใช้ใน JSX
-
   return (
     // --- Container หลัก: พื้นหลัง Gradient และจัดกึ่งกลาง ---
     <div className="flex items-center justify-center min-h-screen p-4 sm:p-6 md:p-8 bg-gradient-to-br from-cyan-500 to-purple-500 relative overflow-hidden">
@@ -147,7 +212,7 @@ const App: React.FC = () => {
           {/* แบบฟอร์ม Login */}
           <form onSubmit={handleSubmit} className="space-y-5">
             
-            {/* ช่องกรอกอีเมล */}
+            {/* ช่องกรอกอีเมล (ใช้ InputField ใหม่) */}
             <div className="mb-4 sm:mb-5">
               <label
                 htmlFor="username"
@@ -155,20 +220,18 @@ const App: React.FC = () => {
               >
                 อีเมล
               </label>
-              <input
-                type="text"
+              {/* ใช้ InputField แทน input HTML เดิม */}
+              <InputField
                 id="username"
-                name="username"
-                placeholder="example@mail.com"
-                required
+                icon={Lock} // ใช้อิโมจิที่ใกล้เคียงกับ Mail (หรือใช้ Lock ในโค้ดนี้)
+                type="text"
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
-                className="w-full px-3 sm:px-4 py-2.5 sm:py-3 border border-gray-300 bg-white/80 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition duration-200 ease-in-out placeholder-gray-400 text-sm sm:text-base shadow-sm hover:border-gray-400"
-                aria-label="ชื่อผู้ใช้ หรือ อีเมล"
+                placeholder="example@mail.com"
               />
             </div>
 
-            {/* ช่องกรอกรหัสผ่าน */}
+            {/* ช่องกรอกรหัสผ่าน (ใช้ InputField ใหม่) */}
             <div className="mb-5 sm:mb-6">
               <label
                 htmlFor="password"
@@ -176,17 +239,16 @@ const App: React.FC = () => {
               >
                 รหัสผ่าน
               </label>
-              <input
-                type="password"
+              {/* ใช้ InputField แทน input HTML เดิม */}
+              <InputField
                 id="password"
-                name="password"
-                placeholder="••••••••"
-                required
+                icon={Lock}
+                type="password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                className="w-full px-3 sm:px-4 py-2.5 sm:py-3 border border-gray-300 bg-white/80 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition duration-200 ease-in-out placeholder-gray-400 text-sm sm:text-base shadow-sm hover:border-gray-400"
-                aria-label="รหัสผ่าน"
+                placeholder="••••••••"
               />
+
               {/* ลิงก์ลืมรหัสผ่าน */}
               <div className="flex justify-end mt-2 sm:mt-3">
                 <a

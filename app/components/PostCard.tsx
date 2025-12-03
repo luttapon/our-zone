@@ -465,7 +465,7 @@ export default function PostCard({
       />
 
       {/* 2. เมนูตัวเลือก (Edit/Delete) - แสดงเฉพาะเจ้าของโพสต์และเมื่อไม่อยู่ในโหมดแก้ไข */}
-      {userId === post.user_id && !isEditing && (
+      {(userId === post.user_id || userId === groupOwnerId) && !isEditing && (
         <div ref={menuRef} className="absolute top-4 right-4 z-10">
           <button
             type="button"
@@ -494,6 +494,7 @@ export default function PostCard({
 
           {isMenuOpen && (
             <div className="absolute top-full right-0 mt-1 bg-white border border-gray-200 rounded-lg shadow-lg min-w-[140px]">
+              {userId === post.user_id && (
               <button
                 type="button"
                 onClick={handleEdit}
@@ -501,10 +502,11 @@ export default function PostCard({
               >
                 ✏️ แก้ไขโพสต์
               </button>
+              )}
               <button
                 type="button"
                 onClick={handleDelete}
-                className="block w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-gray-100 rounded-b-lg"
+                className={`block w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-gray-100 rounded-b-lg ${userId === post.user_id ? 'rounded-b-lg' : 'rounded-lg'}`}
               >
                 🗑️ ลบโพสต์
               </button>
