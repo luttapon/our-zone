@@ -467,7 +467,7 @@ export default function Page() {
 
   // --- Render: หน้าโปรไฟล์หลัก ---
   return (
-    <div className="min-h-screen bg-gray-50/50 pb-20">
+    <div className="min-h-screen bg-gray-50/50 pb-20 ">
       
       {/* Modal แสดงรูปภาพขยาย (Image Modal) */}
       {showImageModal && (

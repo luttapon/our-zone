@@ -13,7 +13,7 @@ export default function MainLayout({
     <FollowedGroupsProvider>
       <NavbarTop />
       <NavbarSub />
-      <main className="min-h-screen pt-30">
+      <main className="min-h-screen pt-25">
         {children}
       </main>
     </FollowedGroupsProvider>

@@ -13,6 +13,8 @@ import { usePathname } from "next/navigation";
 import type { RealtimeChannel } from "@supabase/supabase-js";
 // Icon แสดงกลุ่ม
 import { UsersRound } from "lucide-react";
+// Hook สำหรับตรวจสอบทิศทางการเลื่อน
+import { useScrollDirection } from "@/lib/hooks/useScrollDirection";
 
 // ----------------------------------------------------------------------
 // --- กำหนดโครงสร้างข้อมูล (Types) 
@@ -40,6 +42,9 @@ export const NavbarSub = () => {
   // --- Context & Hooks ---
   const { groups } = useFollowedGroups(); // ดึงรายชื่อกลุ่มที่ติดตามจาก Context
   const pathname = usePathname();         // ดึง URL path ปัจจุบัน
+  
+  // ใช้ Hook เพื่อตรวจสอบทิศทางการเลื่อน
+  const isScrollingUp = useScrollDirection();
 
   // --- State Management ---
   // เก็บจำนวนโพสต์ที่ยังไม่อ่าน: { groupId: count }
@@ -179,12 +184,17 @@ export const NavbarSub = () => {
   return (
     // --- Container หลัก: แถบนำทางรอง (Fixed Position ใต้ Navbar หลัก) ---
     <nav
-      className="
-        fixed top-20 left-0 w-full z-40
+      className={`
+        fixed left-0 w-full z-40
         bg-white/80 backdrop-blur-md
         shadow-[0_4px_10px_rgba(0,0,0,0.06)]
         border-b border-slate-200
-      "
+        transition-all duration-300 ease-in-out
+        ${isScrollingUp 
+          ? "top-20 opacity-100 translate-y-0" 
+          : "top-20 opacity-0 -translate-y-full pointer-events-none"
+        }
+      `}
     >
       {/* ---------------- TOP BAR (ปุ่มนำทางหลัก) ---------------- */}
       <div className="flex items-center justify-between px-4 sm:px-6 py-3 h-16 gap-2">

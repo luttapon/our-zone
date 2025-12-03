@@ -7,6 +7,8 @@ import { useEffect, useState, useRef } from "react";
 import { supabase } from "@/lib/supabase/client";
 // นำเข้า Icon สำหรับ Placeholder
 import { User as UserIcon } from "lucide-react";
+// นำเข้า Hook สำหรับตรวจสอบทิศทางการเลื่อน
+import { useScrollDirection } from "@/lib/hooks/useScrollDirection";
 
 // --- กำหนดโครงสร้างข้อมูล (Types) ---
 interface Group {
@@ -20,6 +22,9 @@ export const NavbarTop = () => {
   const [avatar, setAvatar] = useState<string | null>(null); // เก็บ URL รูปโปรไฟล์
   const [searchTerm, setSearchTerm] = useState(""); // เก็บคำค้นหา
   const [groupResults, setGroupResults] = useState<Group[]>([]); // เก็บผลลัพธ์การค้นหากลุ่ม
+  
+  // ใช้ Hook เพื่อตรวจสอบทิศทางการเลื่อน
+  const isScrollingUp = useScrollDirection();
   
   // ใช้ Ref อ้างอิงถึงกล่องค้นหา เพื่อตรวจสอบการคลิกภายนอก
   const searchRef = useRef<HTMLDivElement>(null);
@@ -89,16 +94,23 @@ export const NavbarTop = () => {
 
   return (
     // --- ส่วนแสดงผล (UI) ---
-    <nav className="flex justify-between items-center bg-gray-900 px-4 sm:px-8 py-2 gap-4 fixed top-0 left-0 w-full z-50 h-20 shadow-lg">
+    <nav className={`
+      flex justify-between items-center bg-gray-900 px-4 sm:px-8 py-2 gap-4 
+      fixed top-0 left-0 w-full z-50 h-20 shadow-lg
+      transition-transform duration-300 ease-in-out
+      ${isScrollingUp ? "translate-y-0" : "-translate-y-full"}
+    `}>
       
       {/* ส่วนซ้าย: โลโก้เว็บไซต์ */}
       <div className="flex-1 flex items-center">
         {/* โลโก้แบบตัวอักษร (Desktop) */}
         <Link
           href="/dashboard"
-          className="text-2xl font-bold text-blue-500 hover:text-white sm:flex hidden"
+          className="sm:flex hidden"
         >
-          Our Zone
+          <div className="bg-gradient-to-r from-blue-500 to-blue-600 px-4 py-2 rounded-lg shadow-lg hover:shadow-xl transition-shadow duration-300 border-2 border-blue-400 hover:scale-105">
+            <span className="text-2xl font-bold text-white drop-shadow-md">Proximity Link</span>
+          </div>
         </Link>
         {/* โลโก้แบบไอคอน (Mobile) */}
         <Link
