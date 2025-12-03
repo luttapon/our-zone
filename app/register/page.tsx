@@ -98,11 +98,7 @@ const RegisterPage = () => {
     setLoading(true);
 
     try {
-      // 💡 1. กำหนด URL สำหรับ Redirect หลังการยืนยันอีเมลสำเร็จ
-      //    Supabase จะ Redirect ผู้ใช้ไปที่หน้านี้เมื่อคลิกยืนยันในอีเมล
-      const redirectToUrl = `${window.location.origin}/confirmEmail`;
-
-      // 2. เรียกใช้ Supabase Sign Up:
+      // 1. เรียกใช้ Supabase Sign Up:
       const { data: authData, error: authError } = await supabase.auth.signUp({
         email,
         password,
@@ -110,8 +106,8 @@ const RegisterPage = () => {
           data: {
             username: username, // ข้อมูลเสริมที่ถูกส่งไป
           },
-          // ⬅️ แก้ไขชื่อ Property เป็น emailRedirectTo
-          emailRedirectTo: redirectToUrl, 
+          // ⚠️ ลบ emailRedirectTo ออก เพื่อให้ Supabase ใช้ค่า Default
+          // emailRedirectTo: redirectToUrl, 
         },
       });
 
@@ -119,7 +115,7 @@ const RegisterPage = () => {
       if (!authData.user)
         throw new Error("Registration failed: Missing User ID.");
 
-      // 3. ลงทะเบียนสำเร็จ: แสดงข้อความแจ้งเตือนให้ไปยืนยันอีเมล
+      // 2. ลงทะเบียนสำเร็จ: แสดงข้อความแจ้งเตือนให้ไปยืนยันอีเมล
       setMessage("สำเร็จ! ตรวจสอบอีเมลของคุณเพื่อยืนยันการลงทะเบียน");
       // เคลียร์ค่าในฟอร์ม
       setEmail("");
@@ -127,7 +123,7 @@ const RegisterPage = () => {
       setPassword("");
       
     } catch (err: unknown) {
-      // 4. จัดการ Error
+      // 3. จัดการ Error
       let errorMessage = "เกิดข้อผิดพลาดในการลงทะเบียน";
       if (err instanceof Error) errorMessage = err.message;
       setMessage(errorMessage);
