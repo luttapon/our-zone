@@ -327,7 +327,7 @@ export default function DashboardPage() {
     );
 
   return (
-    <div className="max-w-5xl mx-auto px-4 sm:px-6 mt-20 space-y-6">
+    <div className="max-w-5xl mx-auto px-4 sm:px-6 mt-34 space-y-6">
       <h2 className="text-2xl font-bold text-gray-900 text-center">
         Feed โพสต์ล่าสุด
       </h2>

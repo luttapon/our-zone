@@ -503,10 +503,10 @@ export default function GroupDetailPage() {
       </div>
 
       {/* 2. เนื้อหาหลัก (Grid Layout) */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mt-6">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mt-6">
         
-        {/* คอลัมน์ซ้าย (ข้อมูลกลุ่ม, ปฏิทิน) */}
-        <div className="md:col-span-1 space-y-6">
+        {/* คอลัมน์ซ้าย (ข้อมูลกลุ่ม, ปฏิทิน) - ซ่อนบน md ขึ้นไป แสดงบน lg ขึ้นไป */}
+        <div className="hidden lg:block space-y-6">
           {/* คำอธิบายกลุ่ม */}
           {group.description && (
             <div className="bg-white p-6 rounded-xl shadow-md border border-gray-200">
@@ -528,8 +528,31 @@ export default function GroupDetailPage() {
           </div>
         </div>
 
-        {/* คอลัมน์ขวา (โพสต์, Feed) */}
-        <div className="md:col-span-2 space-y-6">
+        {/* คอลัมน์ขวา (โพสต์, Feed) - ขยายเต็มบน md */}
+        <div className="col-span-1 lg:col-span-2 space-y-6">
+          
+          {/* แสดงคำอธิบายและปฏิทินบน md ตรงนี้ (ก่อนโพสต์) */}
+          <div className="block lg:hidden">
+            {/* คำอธิบายกลุ่ม */}
+            {group.description && (
+              <div className="bg-white p-6 rounded-xl shadow-md border border-gray-200 mb-6">
+                <h2 className="text-xl font-bold text-gray-800 mb-3">
+                  เกี่ยวกับกลุ่ม
+                </h2>
+                <p className="text-gray-700 break-words whitespace-pre-wrap">
+                  {group.description}
+                </p>
+              </div>
+            )}
+
+            {/* ปฏิทิน - ขยายเต็มบน Tablet */}
+            <div className="bg-white p-6 rounded-xl shadow-md border border-gray-200 mb-6">
+              <h2 className="text-xl font-bold text-gray-800 mb-3">
+                ปฏิทินกิจกรรม
+              </h2>
+              <GroupCalendar groupId={group.id} userId={userId} isOwner={isOwner} />
+            </div>
+          </div>
           
           {/* กล่องเขียนโพสต์ (แสดงเฉพาะผู้มีสิทธิ์) */}
           {userId && (isOwner || isPostingAllowed) && (

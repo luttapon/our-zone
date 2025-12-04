@@ -61,7 +61,7 @@ export default function GroupsPage() {
 
   // --- 3. ส่วนแสดงผลหน้าจอ (Render UI) ---
   return (
-    <div className="min-h-screen bg-gray-50 p-10 flex flex-col items-center">
+    <div className="min-h-screen bg-gray-50 p-10 flex flex-col items-center mt-20">
       
       {/* ส่วนหัวข้อหน้าเว็บ */}
       <div className="bg-gradient-to-r from-sky-500 to-blue-600 rounded-2xl p-8 shadow-lg mb-8 w-full max-w-6xl">

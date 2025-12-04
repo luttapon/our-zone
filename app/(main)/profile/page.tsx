@@ -1,6 +1,7 @@
 "use client"; // แจ้ง Next.js ว่าไฟล์นี้ทำงานที่ฝั่ง Browser (Client Side)
 
 import Image from "next/image";
+import Link from "next/link";
 import React, { useState, useEffect, ChangeEvent, FormEvent } from "react";
 import type { User as SupabaseUser } from "@supabase/supabase-js";
 import { supabase } from "@/lib/supabase/client"; // เครื่องมือเชื่อมต่อฐานข้อมูล Supabase
@@ -466,7 +467,7 @@ export default function Page() {
   const displayCoverUrl = coverPreview || coverPublicUrl || DEFAULT_COVER;
 
   return (
-    <div className="min-h-screen bg-gray-50/50 pb-20 ">
+    <div className="min-h-screen bg-gray-50/50 pb-20 mt-21">
       
       {/* Modal ดูรูปภาพขยาย */}
       {showImageModal && (
@@ -756,8 +757,14 @@ export default function Page() {
                           {profile.username}
                         </p>
                         {groupsMap[post.group_id] && (
-                          <p className="text-xs text-ฺgray-500">
-                            กลุ่ม: {groupsMap[post.group_id].name}
+                          <p className="text-xs text-gray-500">
+                            กลุ่ม:{" "}
+                            <Link
+                              href={`/groups/${post.group_id}`}
+                              className="font-medium text-sky-600 hover:text-sky-700"
+                            >
+                              {groupsMap[post.group_id].name}
+                            </Link>
                           </p>
                         )}
                         <p className="text-xs text-gray-400 font-medium">

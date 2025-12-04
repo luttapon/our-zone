@@ -42,7 +42,6 @@ export const NavbarSub = () => {
   // เก็บจำนวนโพสต์ที่ยังไม่อ่านของแต่ละกลุ่ม { idกลุ่ม: จำนวน }
   const [unreadCounts, setUnreadCounts] = useState<Record<string, number>>({});
   const [userId, setUserId] = useState<string | null>(null); // เก็บ ID ผู้ใช้
-  const [isGroupsVisible, setIsGroupsVisible] = useState(false); // สถานะเปิด/ปิดแถบแสดงกลุ่ม
 
   // --- 2. โหลดข้อมูลผู้ใช้ (Effect) ---
   useEffect(() => {
@@ -207,21 +206,6 @@ export const NavbarSub = () => {
           </Link>
         </div>
 
-        {/* ปุ่มเปิด/ปิดแถบกลุ่ม */}
-        <div className="flex justify-center">
-          <button
-            onClick={() => setIsGroupsVisible(!isGroupsVisible)}
-            className="
-              text-xs sm:text-sm text-slate-600
-              hover:text-sky-600 transition-all
-              px-3 py-1 rounded-lg
-              hover:bg-sky-50 active:scale-95
-            "
-          >
-            {isGroupsVisible ? "ซ่อนกลุ่ม ▲" : "กลุ่มที่ติดตาม ▼"}
-          </button>
-        </div>
-
         {/* ปุ่มสร้างกลุ่ม */}
         <div className="shrink-0">
           <Link
@@ -241,11 +225,10 @@ export const NavbarSub = () => {
 
       {/* 5.2 แถบแสดงรายการกลุ่ม (Group Bar) */}
       <div
-        className={`
+        className="
           overflow-hidden transition-all duration-500 ease-in-out 
           border-t border-slate-200 bg-white/60 backdrop-blur-sm
-          ${isGroupsVisible ? "max-h-24 opacity-100" : "max-h-0 opacity-0"}
-        `}
+        "
       >
         <div className="flex gap-3 px-6 py-3 overflow-x-auto scrollbar-hide scroll-smooth">
           {groups.length === 0 ? (

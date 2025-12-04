@@ -5,7 +5,6 @@ import Image from "next/image";
 import { useEffect, useState, useRef } from "react";
 import { supabase } from "@/lib/supabase/client"; // เครื่องมือเชื่อมต่อฐานข้อมูล Supabase
 import { User as UserIcon } from "lucide-react"; // ไอคอนรูปคน
-import { useScrollDirection } from "@/lib/hooks/useScrollDirection"; // Hook ตรวจสอบการเลื่อนหน้าจอ
 
 // ====================================================================
 // ส่วนกำหนดรูปแบบข้อมูล (Interface)
@@ -27,9 +26,6 @@ export const NavbarTop = () => {
   const [avatar, setAvatar] = useState<string | null>(null);     // เก็บ URL รูปโปรไฟล์
   const [searchTerm, setSearchTerm] = useState("");              // เก็บคำค้นหาที่พิมพ์
   const [groupResults, setGroupResults] = useState<Group[]>([]); // เก็บรายการกลุ่มที่ค้นเจอ
-
-  // ตรวจสอบทิศทางการเลื่อนหน้าจอ (เพื่อซ่อน/แสดง Navbar)
-  const isScrollingUp = useScrollDirection();
   
   // ตัวอ้างอิงตำแหน่งกล่องค้นหา (ใช้ตรวจสอบการคลิกพื้นที่อื่นเพื่อปิดผลการค้นหา)
   const searchRef = useRef<HTMLDivElement>(null);
@@ -99,12 +95,10 @@ export const NavbarTop = () => {
 
   // --- 5. ส่วนแสดงผลหน้าจอ (Render UI) ---
   return (
-    // Navbar หลัก: ติดด้านบน (fixed), ซ่อนเมื่อเลื่อนลง (-translate-y-full)
+    // Navbar หลัก: ติดด้านบน (fixed)
     <nav className={`
       flex justify-between items-center bg-gray-900 px-4 sm:px-8 py-2 gap-4 
       fixed top-0 left-0 w-full z-50 h-20 shadow-lg
-      transition-transform duration-300 ease-in-out
-      ${isScrollingUp ? "translate-y-0" : "-translate-y-full"}
     `}>
       
       {/* ส่วนซ้าย: โลโก้ */}
@@ -139,10 +133,10 @@ export const NavbarTop = () => {
       <div className="flex-1"></div>
 
       {/* ส่วนขวา: ค้นหา และ โปรไฟล์ */}
-      <div className="flex items-center gap-4">
+      <div className="flex items-center gap-2 sm:gap-4">
         
         {/* กล่องค้นหา */}
-        <div ref={searchRef} className="relative w-64">
+        <div ref={searchRef} className="relative w-40 sm:w-64">
           <input
             type="text"
             placeholder="ค้นหากลุ่ม..."
